@@ -1,2 +1,2 @@
-important streamlit as it
+important streamlit as st
 
