@@ -1,3 +1,3 @@
-import steamilt as st
+import streamilt as st
 st.title('천오')
 st.write('바이브코딩')
