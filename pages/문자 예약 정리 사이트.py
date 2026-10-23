@@ -1,324 +1,247 @@
 import re
-from datetime import datetime
-
+from datetime import datetime, date, time
 import streamlit as st
-import pandas as pd
 
-
-# =========================
-# 페이지 설정
-# =========================
 st.set_page_config(
-    page_title="문자 예약 정리",
-    page_icon="🍽️",
-    layout="wide"
+    page_title="예약 보드",
+    page_icon="📅",
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
-st.markdown("""
-<style>
-.stApp {
-    background-color: #f7f8fc;
+SOURCE_STYLES = {
+    "카카오톡": {"bg": "#FFF2C7", "border": "#F2C14E", "text": "#614A00", "emoji": "💬"},
+    "인스타그램": {"bg": "#F3E2F4", "border": "#B66BC4", "text": "#642C70", "emoji": "◎"},
+    "문자": {"bg": "#DCECFB", "border": "#5C9BD5", "text": "#174B78", "emoji": "✉"},
 }
-.main-title {
-    font-size: 32px;
-    font-weight: 800;
-    color: #24324a;
-}
-.sub-title {
-    color: #697386;
-    font-size: 15px;
-}
-.reservation-card {
-    background: white;
-    padding: 18px;
-    border-radius: 14px;
-    border: 1px solid #e7eaf0;
-    margin-bottom: 10px;
-}
-</style>
-""", unsafe_allow_html=True)
 
+# 음식 이름에 따라 카드에 붙일 그림 이모티콘을 고릅니다.
+FOOD_EMOJI_RULES = [
+    (("삼겹", "갈비", "스테이크", "불고기", "고기", "족발", "보쌈", "제육", "돈까스", "돈가스", "치킨", "닭", "오리", "돼지", "소고기", "양고기"), "🍖"),
+    (("찌개", "국밥", "국수국물", "탕", "전골", "국", "수프", "스프"), "🍲"),
+    (("밥", "볶음밥", "덮밥", "비빔밥", "공깃밥", "주먹밥", "초밥", "김밥"), "🍚"),
+    (("라면", "우동", "파스타", "국수", "냉면", "쫄면", "짬뽕", "짜장면", "면", "칼국수", "마라탕"), "🍜"),
+    (("샐러드", "야채", "채소", "쌈", "나물"), "🥗"),
+    (("회", "초밥", "생선", "새우", "조개", "해물", "오징어", "문어", "연어", "참치", "해산물"), "🐟"),
+    (("만두", "전", "튀김", "감자", "고로케"), "🥟"),
+    (("피자",), "🍕"),
+    (("햄버거", "버거", "샌드위치"), "🍔"),
+    (("빵", "베이글", "토스트", "크루아상"), "🥐"),
+    (("떡볶이", "떡", "순대", "어묵", "김치"), "🍢"),
+    (("커피", "라떼", "아메리카노", "주스", "쥬스", "콜라", "음료", "에이드", "차", "맥주", "소주", "물"), "🥤"),
+    (("케이크", "디저트", "아이스크림", "빙수", "쿠키", "초콜릿", "푸딩"), "🍰"),
+    (("계란", "달걀", "오믈렛", "계란찜"), "🍳"),
+]
 
-# =========================
-# 예약 데이터 초기화
-# =========================
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap');
+    html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
+    .stApp { background: #F5F7FB; }
+    .block-container { padding-top: 1.5rem; padding-bottom: 2rem; max-width: 1450px; }
+    header[data-testid="stHeader"] { background: transparent; }
+    .hero { background: linear-gradient(120deg, #18243B 0%, #263D61 100%); border-radius: 22px; padding: 25px 30px; color: white; margin-bottom: 22px; box-shadow: 0 10px 28px rgba(25,43,72,.12); }
+    .hero-title { font-size: 1.8rem; font-weight: 800; letter-spacing: -.5px; }
+    .hero-sub { color: #D8E2F2; font-size: .95rem; margin-top: 5px; }
+    .panel-heading { font-size: 1.12rem; font-weight: 800; color: #202B3D; margin-bottom: 3px; }
+    .panel-sub { font-size: .84rem; color: #7A8495; margin-bottom: 15px; }
+    div[data-testid="stVerticalBlockBorderWrapper"] { background: white; border: 1px solid #E5EAF2; border-radius: 18px; box-shadow: 0 5px 20px rgba(25,43,72,.045); }
+    div[data-testid="stTextArea"] textarea { border-radius: 12px; background: #FBFCFE; border-color: #DDE4EE; font-size: .95rem; }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { border-radius: 10px; border-color: #DDE4EE; }
+    div.stButton > button { border-radius: 11px; min-height: 2.8rem; font-weight: 700; border: 1px solid #D9E1EC; }
+    div.stButton > button[kind="primary"] { background: #253B5D; border-color: #253B5D; }
+    .reservation-card { padding: 15px 16px 14px; border: 1px solid var(--card-border); border-left: 7px solid var(--card-border); border-radius: 14px; background: var(--card-bg); color: #263247; margin: 2px 2px 12px; box-shadow: 0 3px 9px rgba(24,36,59,.035); }
+    .reservation-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .reservation-time { font-size: 1.28rem; font-weight: 800; letter-spacing: -.3px; }
+    .reservation-people { font-size: .9rem; font-weight: 700; }
+    .menu-count { display: inline-block; font-size: .75rem; font-weight: 700; padding: 4px 8px; margin-top: 9px; border-radius: 999px; background: rgba(255,255,255,.72); border: 1px solid rgba(70,80,100,.12); }
+    .food-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; margin-top: 8px; background: rgba(255,255,255,.66); border-radius: 12px; }
+    .food-icon { display: flex; align-items: center; justify-content: center; flex: 0 0 45px; width: 45px; height: 45px; border-radius: 12px; background: rgba(255,255,255,.9); font-size: 1.8rem; }
+    .food-name { flex: 1; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+    .food-quantity { font-size: .88rem; font-weight: 800; white-space: nowrap; }
+    .reservation-source { font-size: .78rem; margin-top: 10px; opacity: .8; }
+    .empty-state { text-align: center; padding: 45px 18px; border: 1px dashed #CBD5E1; border-radius: 14px; color: #7A8495; background: #FAFBFD; }
+    .empty-icon { font-size: 2rem; margin-bottom: 8px; }
+    .small-note { font-size: .8rem; color: #7A8495; }
+    div[data-testid="stMetric"] { background: #F7F9FC; border: 1px solid #E8EDF4; border-radius: 12px; padding: 10px 12px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="hero"><div class="hero-title">📅 예약 보드</div><div class="hero-sub">여러 채널의 예약을 한눈에 · 가까운 예약부터 자동 정렬</div></div>',
+    unsafe_allow_html=True,
+)
+
 if "reservations" not in st.session_state:
     st.session_state.reservations = []
 
 
-# =========================
-# 예약 메시지 분석 함수
-# =========================
-def parse_reservation(text, source):
-    result = {
-        "time": "시간 미확인",
-        "sort_time": "99:99",
-        "people": "인원 미확인",
-        "menu": [],
-        "source": source,
-        "message": text,
-        "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
+def food_emoji(food_name: str) -> str:
+    name = food_name.replace(" ", "")
+    for keywords, emoji in FOOD_EMOJI_RULES:
+        if any(keyword in name for keyword in keywords):
+            return emoji
+    return "🍽️"
 
-    # 예약 시간 분석
-    time_match = re.search(
-        r"(오전|오후)?\s*"
-        r"([01]?\d|2[0-3])\s*시"
-        r"(?:\s*([0-5]?\d)\s*분?)?",
-        text
-    )
 
-    if time_match:
-        period = time_match.group(1)
-        hour = int(time_match.group(2))
-        minute = int(time_match.group(3) or 0)
-
-        if period == "오후" and hour < 12:
-            hour += 12
-        elif period == "오전" and hour == 12:
-            hour = 0
-
-        result["time"] = f"{hour:02d}:{minute:02d}"
-        result["sort_time"] = f"{hour:02d}:{minute:02d}"
-
-    else:
-        # 14:30 또는 14시 30분과 같은 시간 형식
-        time_match = re.search(
-            r"(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?!\d)",
-            text
-        )
-
-        if time_match:
-            hour = int(time_match.group(1))
-            minute = int(time_match.group(2))
-
-            result["time"] = f"{hour:02d}:{minute:02d}"
-            result["sort_time"] = f"{hour:02d}:{minute:02d}"
-
-    # 예약 인원 분석
-    people_match = re.search(
-        r"(\d+)\s*명",
-        text
-    )
-
-    if people_match:
-        result["people"] = f"{people_match.group(1)}명"
-
-    # 메뉴와 수량 분석
-    menu_keywords = [
-        "아메리카노", "카페라떼", "라떼", "바닐라라떼",
-        "아이스티", "에이드", "주스", "콜라", "사이다",
-        "떡볶이", "김밥", "라면", "볶음밥", "돈까스",
-        "파스타", "피자", "치킨", "샌드위치",
-        "케이크", "빵", "쿠키", "샐러드", "빙수"
-    ]
-
-    for food in menu_keywords:
-        if food not in text:
+def parse_food_items(food_text: str):
+    """메뉴 문장을 메뉴별로 나누고, 적혀 있는 수량을 찾아냅니다."""
+    cleaned = re.sub(r"^(?:음식|메뉴)\s*[:：=]\s*", "", food_text.strip())
+    parts = re.split(r"\s*(?:[,，/＋+]\s*|\s+및\s+|\s+그리고\s+|\n+)\s*", cleaned)
+    items = []
+    for part in parts:
+        part = part.strip(" \t-·")
+        if not part:
             continue
-
-        # 메뉴 이름 뒤에 수량이 있는 경우
-        pattern = (
-            re.escape(food)
-            + r"\s*(\d+)\s*(개|잔|그릇|인분|명)?"
-        )
-        quantity_match = re.search(pattern, text)
-
+        quantity_match = re.search(r"(?:\s+|^)(\d+)\s*(인분|개|그릇|잔|접시|병|명|세트|판|마리|줄|인)?\s*$", part)
         if quantity_match:
-            quantity = quantity_match.group(1)
-            unit = quantity_match.group(2) or "개"
-            result["menu"].append(
-                f"{food} {quantity}{unit}"
-            )
+            quantity = int(quantity_match.group(1))
+            unit = quantity_match.group(2)
+            name = part[:quantity_match.start()].strip()
+            quantity_label = f"{quantity}{unit}"
         else:
-            result["menu"].append(food)
-
-    # 중복 메뉴 제거
-    result["menu"] = list(dict.fromkeys(result["menu"]))
-
-    return result
-
-
-# =========================
-# 화면 제목
-# =========================
-st.markdown(
-    '<div class="main-title">🍽️ 문자 예약 정리 사이트</div>',
-    unsafe_allow_html=True
-)
-st.markdown(
-    '<div class="sub-title">'
-    '문자와 메신저로 받은 예약을 한곳에서 정리하세요.'
-    '</div>',
-    unsafe_allow_html=True
-)
-
-st.divider()
+            # 메뉴 이름에 붙은 숫자는 수량으로 오인하지 않고, 수량이 없으면 표시하지 않습니다.
+            name = part
+            quantity_label = ""
+        if name:
+            items.append({"name": name, "emoji": food_emoji(name), "quantity": quantity_label})
+    return items
 
 
-# =========================
-# 예약 현황
-# =========================
-reservations = st.session_state.reservations
+def parse_reservation(raw_text: str):
+    text = raw_text.strip()
+    if not text:
+        return None, "예약 내용을 입력해 주세요."
 
-total_count = len(reservations)
-known_time_count = sum(
-    1 for r in reservations
-    if r["time"] != "시간 미확인"
-)
-known_people_count = sum(
-    1 for r in reservations
-    if r["people"] != "인원 미확인"
-)
+    people_match = re.search(r"(\d+)\s*명", text)
+    if not people_match:
+        people_match = re.search(r"(?:인원|인원수)\s*[:：=]?\s*(\d+)", text)
+    if not people_match:
+        return None, "인원수를 찾지 못했어요. 예: 2명, 18:30, 음식: 파스타"
+    people = int(people_match.group(1))
 
-col1, col2, col3 = st.columns(3)
+    time_match = re.search(r"(?<!\d)([01]?\d|2[0-3])\s*:\s*([0-5]\d)(?!\d)", text)
+    if time_match:
+        hour, minute = int(time_match.group(1)), int(time_match.group(2))
+    else:
+        time_match = re.search(r"(?<!\d)([01]?\d|2[0-3])\s*시(?:\s*([0-5]?\d)\s*분?)?", text)
+        if not time_match:
+            return None, "예약 시간을 찾지 못했어요. 예: 18:30 또는 18시 30분"
+        hour, minute = int(time_match.group(1)), int(time_match.group(2) or 0)
 
-col1.metric("전체 예약", f"{total_count}건")
-col2.metric("시간 확인", f"{known_time_count}건")
-col3.metric("인원 확인", f"{known_people_count}건")
+    food_match = re.search(r"(?:음식|메뉴)\s*[:：=]\s*([^\n]+)", text)
+    if food_match:
+        food_text = food_match.group(1).strip()
+    else:
+        # '2명, 18:30, 삼겹살 2인분, 된장찌개 1개' 형태도 지원합니다.
+        food_text = re.sub(r"\d+\s*명", " ", text)
+        food_text = re.sub(r"(?<!\d)([01]?\d|2[0-3])\s*:\s*[0-5]\d(?!\d)", " ", food_text)
+        food_text = re.sub(r"(?<!\d)([01]?\d|2[0-3])\s*시(?:\s*[0-5]?\d\s*분?)?", " ", food_text)
+        food_text = re.sub(r"(?:인원수?|시간)\s*[:：=]?", " ", food_text)
+        food_text = re.sub(r"^[,，/|\s]+|[,，/|\s]+$", "", food_text)
+        # 앞쪽의 예약 인원/시간 뒤에 오는 구분 기호만 제거하고 메뉴 내부 쉼표는 유지합니다.
+        food_text = re.sub(r"^\s*[,，/|]+\s*", "", food_text)
+        food_text = re.sub(r"\s+", " ", food_text).strip(" -·")
 
-st.divider()
+    food_items = parse_food_items(food_text)
+    if not food_items:
+        return None, "음식 종류를 찾지 못했어요. 예: 음식: 삼겹살 2인분, 된장찌개 1개"
 
-
-# =========================
-# 예약 추가
-# =========================
-st.subheader("📝 새 예약 등록")
-
-with st.form("reservation_form", clear_on_submit=True):
-    source = st.selectbox(
-        "예약을 받은 경로",
-        ["문자(SMS)", "카카오톡", "인스타그램", "전화", "기타"]
-    )
-
-    message = st.text_area(
-        "예약 메시지",
-        placeholder=(
-            "예시: 내일 오후 3시 30분에 4명 예약합니다. "
-            "아메리카노 2잔, 떡볶이 1개"
-        ),
-        height=130
-    )
-
-    submitted = st.form_submit_button(
-        "예약 분석 및 등록",
-        use_container_width=True
-    )
-
-    if submitted:
-        if not message.strip():
-            st.warning("예약 메시지를 입력해 주세요.")
-        else:
-            reservation = parse_reservation(
-                message.strip(),
-                source
-            )
-
-            reservation["id"] = (
-                datetime.now().strftime("%Y%m%d%H%M%S%f")
-            )
-
-            st.session_state.reservations.append(reservation)
-            st.success("예약이 등록되었습니다.")
-            st.rerun()
+    return {
+        "people": people,
+        "hour": hour,
+        "minute": minute,
+        "food": food_text,
+        "food_items": food_items,
+        "datetime": datetime.combine(date.today(), time(hour, minute)),
+        "raw": raw_text.strip(),
+        "created": datetime.now().isoformat(timespec="seconds"),
+    }, None
 
 
-# =========================
-# 예약 목록
-# =========================
-st.divider()
-st.subheader("📋 예약 목록")
+left, right = st.columns([0.92, 1.08], gap="large")
 
-reservations = sorted(
-    st.session_state.reservations,
-    key=lambda r: (r["sort_time"], r["created"])
-)
-
-if not reservations:
-    st.info("아직 등록된 예약이 없습니다.")
-
-else:
-    filter_source = st.selectbox(
-        "예약 경로 필터",
-        ["전체"] + list(dict.fromkeys(
-            r["source"] for r in reservations
-        ))
-    )
-
-    filtered = [
-        r for r in reservations
-        if filter_source == "전체"
-        or r["source"] == filter_source
-    ]
-
-    st.caption(f"표시 중인 예약: {len(filtered)}건")
-
-    for reservation in filtered:
-        with st.container(border=True):
-            left, right = st.columns([5, 1])
-
-            with left:
-                st.markdown(
-                    f"### 🕒 {reservation['time']}"
-                )
-                st.write(
-                    f"**인원:** {reservation['people']}"
-                )
-                st.write(
-                    f"**접수 경로:** {reservation['source']}"
-                )
-
-                if reservation["menu"]:
-                    st.write(
-                        "**메뉴:** " + ", ".join(
-                            reservation["menu"]
-                        )
-                    )
-                else:
-                    st.write("**메뉴:** 확인 필요")
-
-                with st.expander("원본 예약 메시지 보기"):
-                    st.write(reservation["message"])
-                    st.caption(
-                        f"등록 시간: {reservation['created']}"
-                    )
-
-            with right:
-                if st.button(
-                    "삭제",
-                    key=f"delete_{reservation['id']}"
-                ):
-                    st.session_state.reservations = [
-                        r for r in st.session_state.reservations
-                        if r["id"] != reservation["id"]
-                    ]
-                    st.rerun()
-
-
-# =========================
-# 전체 예약 삭제
-# =========================
-st.divider()
-
-if st.session_state.reservations:
-    with st.expander("⚠️ 예약 데이터 관리"):
-        st.warning(
-            "전체 삭제를 누르면 현재 세션의 예약 목록이 모두 삭제됩니다."
+with left:
+    with st.container(border=True):
+        st.markdown('<div class="panel-heading">✍️ 예약 문자 입력</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-sub">메시지를 복사해 붙여 넣고 채널을 선택하세요.</div>', unsafe_allow_html=True)
+        source = st.selectbox("연락이 들어온 앱", list(SOURCE_STYLES.keys()))
+        raw_text = st.text_area(
+            "예약 내용",
+            height=190,
+            placeholder="예시: 4명, 18:30, 삼겹살 2인분, 된장찌개 1개\n\n또는\n인원: 4명 / 시간: 18:30 / 음식: 삼겹살 2인분, 된장찌개 1개",
+            help="인원수, 예약 시간, 음식 종류를 포함한 문자를 붙여 넣어 주세요.",
         )
-
-        confirm_delete = st.checkbox(
-            "전체 예약을 삭제하겠습니다.",
-            key="confirm_delete_all"
-        )
-
-        if st.button(
-            "전체 예약 삭제",
-            type="secondary",
-            use_container_width=True
-        ):
-            if confirm_delete:
-                st.session_state.reservations = []
-                st.success("전체 예약이 삭제되었습니다.")
-                st.rerun()
+        if st.button("＋  예약 추가", type="primary", width="stretch"):
+            reservation, error = parse_reservation(raw_text)
+            if error:
+                st.error(error)
             else:
-                st.error("먼저 확인 체크박스를 선택해 주세요.")
+                reservation["source"] = source
+                reservation["id"] = reservation["created"]
+                st.session_state.reservations.append(reservation)
+                st.toast("예약을 추가했어요!", icon="✅")
+                st.rerun()
+
+        st.markdown("**입력 예시**")
+        st.code("4명, 18:30, 삼겹살 2인분, 된장찌개 1개", language="text")
+        st.code("인원: 2명 / 시간: 19:00 / 음식: 파스타 2개, 콜라 2잔", language="text")
+        st.markdown('<div class="small-note">카카오톡=노랑 · 인스타그램=보라 · 문자=파랑</div>', unsafe_allow_html=True)
+
+with right:
+    with st.container(border=True):
+        st.markdown('<div class="panel-heading">🗂️ 예약 정리표</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-sub">이 영역 안에서 마우스 휠로 예약 목록만 스크롤할 수 있어요.</div>', unsafe_allow_html=True)
+
+        reservations = sorted(
+            st.session_state.reservations,
+            key=lambda item: (item["datetime"] < datetime.now(), item["datetime"]),
+        )
+        total_people = sum(item["people"] for item in reservations)
+        total_menu_kinds = sum(len(item.get("food_items", [])) for item in reservations)
+        m1, m2, m3 = st.columns(3)
+        m1.metric("등록된 예약", f"{len(reservations)}건")
+        m2.metric("예약 인원", f"{total_people}명")
+        m3.metric("메뉴 종류", f"{total_menu_kinds}종")
+
+        # 고정 높이 컨테이너이므로 예약이 많아도 오른쪽 목록만 스크롤됩니다.
+        with st.container(height=570, border=False):
+            if reservations:
+                for item in reservations:
+                    style = SOURCE_STYLES[item["source"]]
+                    time_label = f'{item["hour"]:02d}:{item["minute"]:02d}'
+                    past = item["datetime"] < datetime.now()
+                    status = "지난 시간" if past else "예정"
+                    food_rows = "".join(
+                        f'''<div class="food-row">
+                            <div class="food-icon">{menu["emoji"]}</div>
+                            <div class="food-name">{menu["name"]}</div>
+                            <div class="food-quantity">{menu["quantity"]}</div>
+                        </div>'''
+                        for menu in item.get("food_items", [{"name": item["food"], "emoji": "🍽️", "quantity": ""}])
+                    )
+                    menu_count = len(item.get("food_items", []))
+                    st.markdown(
+                        f'''<div class="reservation-card" style="--card-bg:{style["bg"]}; --card-border:{style["border"]};">
+                            <div class="reservation-top">
+                                <div class="reservation-time">{time_label}</div>
+                                <div class="reservation-people">{item["people"]}명 · {status}</div>
+                            </div>
+                            <div class="menu-count">🍽️ 메뉴 {menu_count}종</div>
+                            {food_rows}
+                            <div class="reservation-source">{style["emoji"]} {item["source"]}</div>
+                        </div>''',
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.markdown(
+                    '<div class="empty-state"><div class="empty-icon">🗓️</div><b>아직 등록된 예약이 없어요.</b><br>왼쪽에서 예약 문자를 입력해 추가해 주세요.</div>',
+                    unsafe_allow_html=True,
+                )
+
+        if reservations and st.button("🗑️ 전체 예약 삭제", width="stretch"):
+            st.session_state.reservations = []
+            st.rerun()
