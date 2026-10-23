@@ -1,4 +1,3 @@
-```python
 import re
 from datetime import datetime
 
@@ -323,4 +322,3 @@ if st.session_state.reservations:
                 st.rerun()
             else:
                 st.error("먼저 확인 체크박스를 선택해 주세요.")
-```
