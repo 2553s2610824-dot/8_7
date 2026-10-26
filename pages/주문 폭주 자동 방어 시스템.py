@@ -71,7 +71,7 @@ is_limit_reached = current_waiting >= st.session_state.max_capacity
 is_blocked = st.session_state.auto_guard_active and is_limit_reached
 
 # ---------------------------------------------------------
-# 4. 실시간 상태 배너 (요청 문구 반영)
+# 4. 실시간 상태 배너 (요청 문구 및 색상 반영)
 # ---------------------------------------------------------
 st.title("🚨 주문 폭주 자동 방어 시스템")
 
@@ -81,7 +81,23 @@ if is_blocked:
 elif is_limit_reached and not st.session_state.auto_guard_active:
     st.warning("⚠️ **현재 주문량이 너무 많습니다.** (경고: 자동 방어가 꺼져 있습니다)")
 else:
-    st.success("🟢 **현재 주문이 가능합니다.**")
+    # 진한 초록색 커스텀 스타일 배너 적용
+    st.markdown(
+        """
+        <div style="
+            background-color: #0b6623;
+            color: #ffffff;
+            padding: 14px 20px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        ">
+            🟢 현재 주문이 가능합니다.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # [요청 문구 3 & 4] 현재 대기수 및 예상 대기시간 대시보드
 col1, col2 = st.columns(2)
