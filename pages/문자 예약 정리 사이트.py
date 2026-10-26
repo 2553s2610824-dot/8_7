@@ -328,12 +328,12 @@ with right:
         )
 
         reservations = sorted(
-            st.session_state.reservations,
-            key=lambda item: (
-                item["datetime"] < datetime.now(),
-                item["datetime"],
-            ),
-        )
+    st.session_state.reservations,
+    key=lambda item: (
+        item.get("datetime", datetime.max) < datetime.now(),
+        item.get("datetime", datetime.max),
+    ),
+)
 
         total_people = sum(item["people"] for item in reservations)
         total_menu_kinds = sum(
