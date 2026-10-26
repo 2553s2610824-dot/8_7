@@ -1,3 +1,4 @@
+
 import re
 from datetime import datetime, date, time
 import streamlit as st
@@ -15,7 +16,7 @@ SOURCE_STYLES = {
     "문자": {"bg": "#DCECFB", "border": "#5C9BD5", "text": "#174B78", "emoji": "✉"},
 }
 
-# 음식 이름에 따라 카드에 붙일 그림 이모티콘을 고릅니다.
+# 음식 이름에 따라 이모티콘 선택
 FOOD_EMOJI_RULES = [
     (("삼겹", "갈비", "스테이크", "불고기", "고기", "족발", "보쌈", "제육", "돈까스", "돈가스", "치킨", "닭", "오리", "돼지", "소고기", "양고기"), "🍖"),
     (("찌개", "국밥", "국수국물", "탕", "전골", "국", "수프", "스프"), "🍲"),
@@ -88,23 +89,130 @@ def food_emoji(food_name: str) -> str:
 
 
 def parse_food_items(food_text: str):
-    """메뉴 문장을 메뉴별로 나누고, 적혀 있는 수량을 찾아냅니다."""
+    """메뉴 문장을 메뉴별로 나누고 수량을 찾아냅니다."""
     cleaned = re.sub(r"^(?:음식|메뉴)\s*[:：=]\s*", "", food_text.strip())
     parts = re.split(r"\s*(?:[,，/＋+]\s*|\s+및\s+|\s+그리고\s+|\n+)\s*", cleaned)
     items = []
+
     for part in parts:
         part = part.strip(" \t-·")
-        food_text,
+        if not part:
+            continue
+
+        quantity_match = re.search(
+            r"(?:\s+|^)(\d+)\s*(인분|개|그릇|잔|접시|병|명|세트|판|마리|줄|인)\s*$",
+            part,
         )
-        food_text = re.sub(r"(?<!\d)([01]?\d|2[0-3])\s*:\s*[0-5]\d(?!\d)", " ", food_text)
-        food_text = re.sub(r"(?<!\d)([01]?\d|2[0-3])\s*시(?:\s*[0-5]?\d\s*분?)?", " ", food_text)
+
+        if quantity_match:
+            quantity = int(quantity_match.group(1))
+            unit = quantity_match.group(2)
+            name = part[:quantity_match.start()].strip()
+            quantity_label = f"{quantity}{unit}"
+        else:
+            name = part
+            quantity_label = ""
+
+        if name:
+            items.append({
+                "name": name,
+                "emoji": food_emoji(name),
+                "quantity": quantity_label,
+            })
+
+    return items
+
+
+def parse_reservation(raw_text: str):
+    text = raw_text.strip()
+
+    if not text:
+        return None, "예약 내용을 입력해 주세요."
+
+    # 예약 인원 확인
+    people_match = re.search(r"(\d+)\s*명", text)
+
+    if not people_match:
+        people_match = re.search(r"(?:인원|인원수)\s*[:：=]?\s*(\d+)", text)
+
+    if not people_match:
+        return None, "인원수를 찾지 못했어요. 예: 2명, 18:30, 음식: 파스타"
+
+    people = int(people_match.group(1))
+
+    # 예약 날짜: 2026년 10월 28일, 10월 28일, 10/28, 10-28 지원
+    date_match = re.search(
+        r"(?:(20\d{2})\s*년\s*)?(\d{1,2})\s*(?:월|[./-])\s*(\d{1,2})\s*(?:일)?",
+        text,
+    )
+
+    if date_match:
+        year = int(date_match.group(1) or date.today().year)
+        month = int(date_match.group(2))
+        day = int(date_match.group(3))
+
+        try:
+            reservation_date = date(year, month, day)
+        except ValueError:
+            return None, "예약 날짜가 올바르지 않아요. 예: 10월 28일 또는 10/28"
+    else:
+        # 날짜가 없으면 오늘 날짜로 등록
+        reservation_date = date.today()
+
+    # 예약 시간 확인
+    time_match = re.search(
+        r"(?<!\d)([01]?\d|2[0-3])\s*:\s*([0-5]\d)(?!\d)",
+        text,
+    )
+
+    if time_match:
+        hour, minute = int(time_match.group(1)), int(time_match.group(2))
+    else:
+        time_match = re.search(
+            r"(?<!\d)([01]?\d|2[0-3])\s*시(?:\s*([0-5]?\d)\s*분?)?",
+            text,
+        )
+
+        if not time_match:
+            return None, "예약 시간을 찾지 못했어요. 예: 18:30 또는 18시 30분"
+
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2) or 0)
+
+    # 음식 확인
+    food_match = re.search(r"(?:음식|메뉴)\s*[:：=]\s*([^\n]+)", text)
+
+    if food_match:
+        food_text = food_match.group(1).strip()
+    else:
+        food_text = re.sub(r"\d+\s*명", " ", text)
+
+        # 음식 내용에서 날짜 표현 제거
+        food_text = re.sub(
+            r"(?:(?:20\d{2})\s*년\s*)?\d{1,2}\s*(?:월|[./-])\s*\d{1,2}\s*(?:일)?",
+            " ",
+            food_text,
+        )
+
+        food_text = re.sub(
+            r"(?<!\d)([01]?\d|2[0-3])\s*:\s*[0-5]\d(?!\d)",
+            " ",
+            food_text,
+        )
+
+        food_text = re.sub(
+            r"(?<!\d)([01]?\d|2[0-3])\s*시(?:\s*[0-5]?\d\s*분?)?",
+            " ",
+            food_text,
+        )
+
         food_text = re.sub(r"(?:인원수?|시간)\s*[:：=]?", " ", food_text)
         food_text = re.sub(r"^[,，/|\s]+|[,，/|\s]+$", "", food_text)
-        # 앞쪽의 예약 인원/시간 뒤에 오는 구분 기호만 제거하고 메뉴 내부 쉼표는 유지합니다.
         food_text = re.sub(r"^\s*[,，/|]+\s*", "", food_text)
         food_text = re.sub(r"\s+", " ", food_text).strip(" -·")
 
     food_items = parse_food_items(food_text)
+
     if not food_items:
         return None, "음식 종류를 찾지 못했어요. 예: 음식: 삼겹살 2인분, 된장찌개 1개"
 
@@ -124,17 +232,32 @@ left, right = st.columns([0.92, 1.08], gap="large")
 
 with left:
     with st.container(border=True):
-        st.markdown('<div class="panel-heading">✍️ 예약 문자 입력</div>', unsafe_allow_html=True)
-        st.markdown('<div class="panel-sub">메시지를 복사해 붙여 넣고 채널을 선택하세요.</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="panel-heading">✍️ 예약 문자 입력</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            '<div class="panel-sub">메시지를 복사해 붙여 넣고 채널을 선택하세요.</div>',
+            unsafe_allow_html=True,
+        )
+
         source = st.selectbox("연락이 들어온 앱", list(SOURCE_STYLES.keys()))
+
         raw_text = st.text_area(
             "예약 내용",
             height=190,
-            placeholder="예시: 10월 28일, 4명, 18:30, 삼겹살 2인분, 된장찌개 1개\n\n또는\n날짜: 10/28 / 인원: 4명 / 시간: 18:30 / 음식: 삼겹살 2인분, 된장찌개 1개",
-            help="인원수, 예약 시간, 음식 종류를 포함한 문자를 붙여 넣어 주세요.",
+            placeholder=(
+                "예시: 10월 28일, 4명, 18:30, 삼겹살 2인분, 된장찌개 1개\n\n"
+                "또는\n"
+                "날짜: 10/28 / 인원: 4명 / 시간: 18:30 / 음식: 삼겹살 2인분, 된장찌개 1개"
+            ),
+            help="날짜, 인원수, 예약 시간, 음식 종류를 포함한 문자를 붙여 넣어 주세요.",
         )
+
         if st.button("＋  예약 추가", type="primary", width="stretch"):
             reservation, error = parse_reservation(raw_text)
+
             if error:
                 st.error(error)
             else:
@@ -145,60 +268,103 @@ with left:
                 st.rerun()
 
         st.markdown("**입력 예시**")
-        st.code("10월 28일, 4명, 18:30, 삼겹살 2인분, 된장찌개 1개", language="text")
-        st.code("날짜: 10/28 / 인원: 2명 / 시간: 19:00 / 음식: 파스타 2개, 콜라 2잔", language="text")
-        st.markdown('<div class="small-note">카카오톡=노랑 · 인스타그램=보라 · 문자=파랑</div>', unsafe_allow_html=True)
+        st.code(
+            "10월 28일, 4명, 18:30, 삼겹살 2인분, 된장찌개 1개",
+            language="text",
+        )
+        st.code(
+            "날짜: 10/28 / 인원: 2명 / 시간: 19:00 / 음식: 파스타 2개, 콜라 2잔",
+            language="text",
+        )
+
+        st.markdown(
+            '<div class="small-note">카카오톡=노랑 · 인스타그램=보라 · 문자=파랑</div>',
+            unsafe_allow_html=True,
+        )
+
 
 with right:
     with st.container(border=True):
-        st.markdown('<div class="panel-heading">🗂️ 예약 정리표</div>', unsafe_allow_html=True)
-        st.markdown('<div class="panel-sub">이 영역 안에서 마우스 휠로 예약 목록만 스크롤할 수 있어요.</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="panel-heading">🗂️ 예약 정리표</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            '<div class="panel-sub">이 영역 안에서 마우스 휠로 예약 목록만 스크롤할 수 있어요.</div>',
+            unsafe_allow_html=True,
+        )
 
         reservations = sorted(
             st.session_state.reservations,
-            key=lambda item: (item["datetime"] < datetime.now(), item["datetime"]),
+            key=lambda item: (
+                item["datetime"] < datetime.now(),
+                item["datetime"],
+            ),
         )
+
         total_people = sum(item["people"] for item in reservations)
-        total_menu_kinds = sum(len(item.get("food_items", [])) for item in reservations)
+        total_menu_kinds = sum(
+            len(item.get("food_items", []))
+            for item in reservations
+        )
+
         m1, m2, m3 = st.columns(3)
         m1.metric("등록된 예약", f"{len(reservations)}건")
         m2.metric("예약 인원", f"{total_people}명")
         m3.metric("메뉴 종류", f"{total_menu_kinds}종")
 
-        # 고정 높이 컨테이너이므로 예약이 많아도 오른쪽 목록만 스크롤됩니다.
+        # 예약이 많아도 오른쪽 목록만 스크롤
         with st.container(height=570, border=False):
             if reservations:
                 for item in reservations:
                     style = SOURCE_STYLES[item["source"]]
+
                     time_label = f'{item["hour"]:02d}:{item["minute"]:02d}'
                     date_label = item["datetime"].strftime("%m월 %d일")
-                    weekday_label = ["월", "화", "수", "목", "금", "토", "일"][item["datetime"].weekday()]
+                    weekday_label = [
+                        "월", "화", "수", "목", "금", "토", "일"
+                    ][item["datetime"].weekday()]
+
                     past = item["datetime"] < datetime.now()
                     status = "지난 시간" if past else "예정"
+
                     food_rows = "".join(
                         f'''<div class="food-row">
                             <div class="food-icon">{menu["emoji"]}</div>
                             <div class="food-name">{menu["name"]}</div>
                             <div class="food-quantity">{menu["quantity"]}</div>
                         </div>'''
-                        for menu in item.get("food_items", [{"name": item["food"], "emoji": "🍽️", "quantity": ""}])
+                        for menu in item.get(
+                            "food_items",
+                            [{"name": item["food"], "emoji": "🍽️", "quantity": ""}],
+                        )
                     )
+
                     menu_count = len(item.get("food_items", []))
+
                     st.markdown(
                         f'''<div class="reservation-card" style="--card-bg:{style["bg"]}; --card-border:{style["border"]};">
                             <div class="reservation-top">
                                 <div>
                                     <div class="reservation-time">{time_label}</div>
-                                    <div style="font-size:.85rem; font-weight:700; margin-top:3px;">📅 {date_label} ({weekday_label})</div>
+                                    <div style="font-size:.85rem; font-weight:700; margin-top:3px;">
+                                        📅 {date_label} ({weekday_label})
+                                    </div>
                                 </div>
-                                <div class="reservation-people">{item["people"]}명 · {status}</div>
+                                <div class="reservation-people">
+                                    {item["people"]}명 · {status}
+                                </div>
                             </div>
                             <div class="menu-count">🍽️ 메뉴 {menu_count}종</div>
                             {food_rows}
-                            <div class="reservation-source">{style["emoji"]} {item["source"]}</div>
+                            <div class="reservation-source">
+                                {style["emoji"]} {item["source"]}
+                            </div>
                         </div>''',
                         unsafe_allow_html=True,
                     )
+
             else:
                 st.markdown(
                     '<div class="empty-state"><div class="empty-icon">🗓️</div><b>아직 등록된 예약이 없어요.</b><br>왼쪽에서 예약 문자를 입력해 추가해 주세요.</div>',
