@@ -1,5 +1,7 @@
 
 import re
+import json
+import os
 from datetime import datetime, date, time
 import streamlit as st
 
@@ -10,17 +12,19 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# 예약 저장 파일
+SAVE_FILE = "reservations.json"
+
 SOURCE_STYLES = {
     "카카오톡": {"bg": "#FFF2C7", "border": "#F2C14E", "text": "#614A00", "emoji": "💬"},
     "인스타그램": {"bg": "#F3E2F4", "border": "#B66BC4", "text": "#642C70", "emoji": "◎"},
     "문자": {"bg": "#DCECFB", "border": "#5C9BD5", "text": "#174B78", "emoji": "✉"},
 }
 
-# 음식 이름에 따라 이모티콘 선택
 FOOD_EMOJI_RULES = [
     (("삼겹", "갈비", "스테이크", "불고기", "고기", "족발", "보쌈", "제육", "돈까스", "돈가스", "치킨", "닭", "오리", "돼지", "소고기", "양고기"), "🍖"),
-    (("찌개", "국밥", "국수국물", "탕", "전골", "국", "수프", "스프"), "🍲"),
-    (("밥", "볶음밥", "덮밥", "비빔밥", "공깃밥", "주먹밥", "초밥", "김밥"), "🍚"),
+    (("찌개", "국밥", "탕", "전골", "국", "수프", "스프"), "🍲"),
+    (("밥", "볶음밥", "덮밥", "비빔밥", "공깃밥", "주먹밥", "김밥"), "🍚"),
     (("라면", "우동", "파스타", "국수", "냉면", "쫄면", "짬뽕", "짜장면", "면", "칼국수", "마라탕"), "🍜"),
     (("샐러드", "야채", "채소", "쌈", "나물"), "🥗"),
     (("회", "초밥", "생선", "새우", "조개", "해물", "오징어", "문어", "연어", "참치", "해산물"), "🐟"),
@@ -33,6 +37,46 @@ FOOD_EMOJI_RULES = [
     (("케이크", "디저트", "아이스크림", "빙수", "쿠키", "초콜릿", "푸딩"), "🍰"),
     (("계란", "달걀", "오믈렛", "계란찜"), "🍳"),
 ]
+
+# 예약 파일에 저장
+def save_reservations():
+    try:
+        saved_data = []
+
+        for item in st.session_state.reservations:
+            saved_item = item.copy()
+            saved_item["datetime"] = item["datetime"].isoformat()
+            saved_data.append(saved_item)
+
+        with open(SAVE_FILE, "w", encoding="utf-8") as file:
+            json.dump(saved_data, file, ensure_ascii=False, indent=4)
+
+    except (OSError, TypeError, ValueError) as e:
+        st.warning(f"예약 저장 중 문제가 발생했어요: {e}")
+
+
+# 저장된 예약 불러오기
+def load_reservations():
+    if not os.path.exists(SAVE_FILE):
+        return []
+
+    try:
+        with open(SAVE_FILE, "r", encoding="utf-8") as file:
+            saved_data = json.load(file)
+
+        for item in saved_data:
+            item["datetime"] = datetime.fromisoformat(item["datetime"])
+
+        return saved_data
+
+    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return []
+
+
+# 처음 실행할 때 저장된 예약 불러오기
+if "reservations" not in st.session_state:
+    st.session_state.reservations = load_reservations()
+
 
 st.markdown(
     """
@@ -76,9 +120,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if "reservations" not in st.session_state:
-    st.session_state.reservations = []
-
 
 def food_emoji(food_name: str) -> str:
     name = food_name.replace(" ", "")
@@ -89,7 +130,6 @@ def food_emoji(food_name: str) -> str:
 
 
 def parse_food_items(food_text: str):
-    """메뉴 문장을 메뉴별로 나누고 수량을 찾아냅니다."""
     cleaned = re.sub(r"^(?:음식|메뉴)\s*[:：=]\s*", "", food_text.strip())
     parts = re.split(r"\s*(?:[,，/＋+]\s*|\s+및\s+|\s+그리고\s+|\n+)\s*", cleaned)
     items = []
@@ -129,7 +169,6 @@ def parse_reservation(raw_text: str):
     if not text:
         return None, "예약 내용을 입력해 주세요."
 
-    # 예약 인원 확인
     people_match = re.search(r"(\d+)\s*명", text)
 
     if not people_match:
@@ -140,7 +179,7 @@ def parse_reservation(raw_text: str):
 
     people = int(people_match.group(1))
 
-    # 예약 날짜: 2026년 10월 28일, 10월 28일, 10/28, 10-28 지원
+    # 날짜: 10월 28일, 10/28, 10-28, 2026년 10월 28일
     date_match = re.search(
         r"(?:(20\d{2})\s*년\s*)?(\d{1,2})\s*(?:월|[./-])\s*(\d{1,2})\s*(?:일)?",
         text,
@@ -154,19 +193,18 @@ def parse_reservation(raw_text: str):
         try:
             reservation_date = date(year, month, day)
         except ValueError:
-            return None, "예약 날짜가 올바르지 않아요. 예: 10월 28일 또는 10/28"
+            return None, "날짜가 올바르지 않아요. 예: 10월 28일 또는 10/28"
     else:
-        # 날짜가 없으면 오늘 날짜로 등록
         reservation_date = date.today()
 
-    # 예약 시간 확인
     time_match = re.search(
         r"(?<!\d)([01]?\d|2[0-3])\s*:\s*([0-5]\d)(?!\d)",
         text,
     )
 
     if time_match:
-        hour, minute = int(time_match.group(1)), int(time_match.group(2))
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2))
     else:
         time_match = re.search(
             r"(?<!\d)([01]?\d|2[0-3])\s*시(?:\s*([0-5]?\d)\s*분?)?",
@@ -179,7 +217,6 @@ def parse_reservation(raw_text: str):
         hour = int(time_match.group(1))
         minute = int(time_match.group(2) or 0)
 
-    # 음식 확인
     food_match = re.search(r"(?:음식|메뉴)\s*[:：=]\s*([^\n]+)", text)
 
     if food_match:
@@ -187,7 +224,6 @@ def parse_reservation(raw_text: str):
     else:
         food_text = re.sub(r"\d+\s*명", " ", text)
 
-        # 음식 내용에서 날짜 표현 제거
         food_text = re.sub(
             r"(?:(?:20\d{2})\s*년\s*)?\d{1,2}\s*(?:월|[./-])\s*\d{1,2}\s*(?:일)?",
             " ",
@@ -236,7 +272,6 @@ with left:
             '<div class="panel-heading">✍️ 예약 문자 입력</div>',
             unsafe_allow_html=True,
         )
-
         st.markdown(
             '<div class="panel-sub">메시지를 복사해 붙여 넣고 채널을 선택하세요.</div>',
             unsafe_allow_html=True,
@@ -250,7 +285,7 @@ with left:
             placeholder=(
                 "예시: 10월 28일, 4명, 18:30, 삼겹살 2인분, 된장찌개 1개\n\n"
                 "또는\n"
-                "날짜: 10/28 / 인원: 4명 / 시간: 18:30 / 음식: 삼겹살 2인분, 된장찌개 1개"
+                "날짜: 10/28 / 인원: 4명 / 시간: 18:30 / 음식: 파스타 2개"
             ),
             help="날짜, 인원수, 예약 시간, 음식 종류를 포함한 문자를 붙여 넣어 주세요.",
         )
@@ -264,18 +299,16 @@ with left:
                 reservation["source"] = source
                 reservation["id"] = reservation["created"]
                 st.session_state.reservations.append(reservation)
-                st.toast("예약을 추가했어요!", icon="✅")
+
+                # 예약 추가 즉시 저장
+                save_reservations()
+
+                st.toast("예약을 추가하고 저장했어요!", icon="✅")
                 st.rerun()
 
         st.markdown("**입력 예시**")
-        st.code(
-            "10월 28일, 4명, 18:30, 삼겹살 2인분, 된장찌개 1개",
-            language="text",
-        )
-        st.code(
-            "날짜: 10/28 / 인원: 2명 / 시간: 19:00 / 음식: 파스타 2개, 콜라 2잔",
-            language="text",
-        )
+        st.code("10월 28일, 4명, 18:30, 삼겹살 2인분, 된장찌개 1개")
+        st.code("날짜: 10/28 / 인원: 2명 / 시간: 19:00 / 음식: 파스타 2개, 콜라 2잔")
 
         st.markdown(
             '<div class="small-note">카카오톡=노랑 · 인스타그램=보라 · 문자=파랑</div>',
@@ -289,9 +322,8 @@ with right:
             '<div class="panel-heading">🗂️ 예약 정리표</div>',
             unsafe_allow_html=True,
         )
-
         st.markdown(
-            '<div class="panel-sub">이 영역 안에서 마우스 휠로 예약 목록만 스크롤할 수 있어요.</div>',
+            '<div class="panel-sub">예약 목록은 이 영역 안에서 스크롤할 수 있어요.</div>',
             unsafe_allow_html=True,
         )
 
@@ -314,7 +346,6 @@ with right:
         m2.metric("예약 인원", f"{total_people}명")
         m3.metric("메뉴 종류", f"{total_menu_kinds}종")
 
-        # 예약이 많아도 오른쪽 목록만 스크롤
         with st.container(height=570, border=False):
             if reservations:
                 for item in reservations:
@@ -364,7 +395,6 @@ with right:
                         </div>''',
                         unsafe_allow_html=True,
                     )
-
             else:
                 st.markdown(
                     '<div class="empty-state"><div class="empty-icon">🗓️</div><b>아직 등록된 예약이 없어요.</b><br>왼쪽에서 예약 문자를 입력해 추가해 주세요.</div>',
@@ -373,4 +403,8 @@ with right:
 
         if reservations and st.button("🗑️ 전체 예약 삭제", width="stretch"):
             st.session_state.reservations = []
+
+            # 삭제 내용도 저장 파일에 반영
+            save_reservations()
+
             st.rerun()
