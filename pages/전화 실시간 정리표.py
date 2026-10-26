@@ -71,6 +71,22 @@ def add_call(caller, phone, category, summary, status):
         ))
 
 
+def update_call_phone(call_id, phone):
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE calls SET phone = ? WHERE id = ?",
+            (phone.strip(), int(call_id)),
+        )
+
+
+def delete_call(call_id):
+    with get_connection() as conn:
+        conn.execute(
+            "DELETE FROM calls WHERE id = ?",
+            (int(call_id),),
+        )
+
+
 def add_sale(sale_date, product, quantity, unit_price, note):
     with get_connection() as conn:
         conn.execute("""
@@ -84,6 +100,14 @@ def add_sale(sale_date, product, quantity, unit_price, note):
             int(unit_price),
             note.strip(),
         ))
+
+
+def delete_sale(sale_id):
+    with get_connection() as conn:
+        conn.execute(
+            "DELETE FROM sales WHERE id = ?",
+            (int(sale_id),),
+        )
 
 
 def load_calls():
@@ -103,14 +127,13 @@ def load_sales():
         """, conn)
 
 
+# -------------------------
 # 데이터베이스 초기화
+# -------------------------
 try:
     init_db()
 except (sqlite3.Error, OSError):
-    st.error(
-        "데이터베이스를 준비하지 못했습니다. "
-        "저장 경로와 파일 권한을 확인해 주세요."
-    )
+    st.error("데이터베이스를 준비하지 못했습니다.")
     st.stop()
 
 
@@ -135,14 +158,10 @@ def call_entry_form():
     with st.expander("➕ 새 전화 기록 추가", expanded=True):
         with st.form("call_form", clear_on_submit=True):
             caller = st.text_input("발신자 이름")
-            phone = st.text_input("전화번호")
-            category = st.selectbox(
-                "전화 유형", CALL_CATEGORIES
-            )
+            phone = st.text_input("전화번호 (선택)")
+            category = st.selectbox("전화 유형", CALL_CATEGORIES)
             summary = st.text_area("통화 내용 요약")
-            status = st.selectbox(
-                "처리 상태", CALL_STATUSES
-            )
+            status = st.selectbox("처리 상태", CALL_STATUSES)
 
             submitted = st.form_submit_button(
                 "전화 기록 저장",
@@ -151,9 +170,7 @@ def call_entry_form():
 
         if submitted:
             try:
-                add_call(
-                    caller, phone, category, summary, status
-                )
+                add_call(caller, phone, category, summary, status)
                 st.success("전화 기록을 저장했습니다.")
                 st.rerun()
             except (sqlite3.Error, OSError):
@@ -161,17 +178,13 @@ def call_entry_form():
 
 
 # -------------------------
-# 매출 입력
+# 매출 기록 입력
 # -------------------------
 def sales_entry_form():
     with st.expander("➕ 매출 내역 추가", expanded=True):
         with st.form("sales_form", clear_on_submit=True):
-            sale_date = st.date_input(
-                "매출 날짜", value=date.today()
-            )
-            product = st.text_input(
-                "상품명", placeholder="예: 음료"
-            )
+            sale_date = st.date_input("매출 날짜", value=date.today())
+            product = st.text_input("상품명", placeholder="예: 음료")
             quantity = st.number_input(
                 "수량", min_value=1, value=1, step=1
             )
@@ -181,7 +194,7 @@ def sales_entry_form():
                 value=0,
                 step=100,
             )
-            note = st.text_input("메모(선택)")
+            note = st.text_input("메모 (선택)")
 
             st.caption(
                 f"예상 매출: {int(quantity) * int(unit_price):,}원"
@@ -198,11 +211,7 @@ def sales_entry_form():
             else:
                 try:
                     add_sale(
-                        sale_date,
-                        product,
-                        quantity,
-                        unit_price,
-                        note,
+                        sale_date, product, quantity, unit_price, note
                     )
                     st.success("매출 내역을 저장했습니다.")
                     st.rerun()
@@ -248,7 +257,6 @@ def dashboard():
 
     with left:
         st.subheader("📊 전화 유형별 건수")
-
         if calls.empty:
             st.info("전화 기록을 추가해 주세요.")
         else:
@@ -259,14 +267,11 @@ def dashboard():
                 .reset_index(name="건수")
             )
             st.bar_chart(
-                category_counts,
-                x="전화 유형",
-                y="건수",
+                category_counts, x="전화 유형", y="건수"
             )
 
     with right:
         st.subheader("📈 일별 매출")
-
         if sales.empty:
             st.info("매출 내역을 추가해 주세요.")
         else:
@@ -280,40 +285,30 @@ def dashboard():
                 .sort_values("매출일")
             )
             st.line_chart(
-                sales_by_day,
-                x="매출일",
-                y="매출(원)",
+                sales_by_day, x="매출일", y="매출(원)"
             )
 
     st.subheader("🕒 시간대별 전화량")
-
     if calls.empty:
-        st.info("전화 기록을 추가하면 시간대별 통계가 표시됩니다.")
+        st.info("전화 기록을 추가하면 통계가 표시됩니다.")
     else:
         calls["call_time"] = pd.to_datetime(
             calls["call_time"], errors="coerce"
         )
         hourly = (
             calls.dropna(subset=["call_time"])
-            .assign(
-                시간=lambda frame:
-                    frame["call_time"].dt.floor("h")
-            )
+            .assign(시간=lambda frame: frame["call_time"].dt.floor("h"))
             .groupby("시간")
             .size()
             .reset_index(name="전화 건수")
             .sort_values("시간")
         )
-
         if hourly.empty:
             st.info("시간 통계를 계산할 기록이 없습니다.")
         else:
-            st.line_chart(
-                hourly, x="시간", y="전화 건수"
-            )
+            st.line_chart(hourly, x="시간", y="전화 건수")
 
     st.subheader("📋 최근 전화 기록")
-
     if calls.empty:
         st.info("아직 전화 기록이 없습니다.")
     else:
@@ -325,7 +320,6 @@ def dashboard():
             "summary": "통화 내용",
             "status": "처리 상태",
         })
-
         st.dataframe(
             recent[[
                 "전화 시간", "발신자", "전화번호",
@@ -336,7 +330,6 @@ def dashboard():
         )
 
     st.subheader("🛍️ 상품별 매출")
-
     if sales.empty:
         st.info("매출 내역이 없습니다.")
     else:
@@ -349,21 +342,13 @@ def dashboard():
             })
             .sort_values("매출(원)", ascending=False)
         )
-
-        st.bar_chart(
-            by_product,
-            x="상품명",
-            y="매출(원)",
-        )
+        st.bar_chart(by_product, x="상품명", y="매출(원)")
 
 
 # -------------------------
-# 메뉴별 화면
+# 전화 기록 화면
 # -------------------------
-if page == "대시보드":
-    dashboard()
-
-elif page == "전화 기록":
+def phone_records_page():
     call_entry_form()
     st.subheader("📋 전화 기록 목록")
 
@@ -371,34 +356,25 @@ elif page == "전화 기록":
         df = load_calls()
     except (sqlite3.Error, pd.errors.DatabaseError, OSError):
         st.error("전화 기록을 불러오지 못했습니다.")
-        st.stop()
+        return
 
-    keyword = st.text_input(
-        "발신자·전화번호·통화 내용 검색"
-    )
+    keyword = st.text_input("발신자·전화번호·통화 내용 검색")
     status_filter = st.selectbox(
-        "처리 상태 필터",
-        ["전체"] + CALL_STATUSES,
+        "처리 상태 필터", ["전체"] + CALL_STATUSES
     )
 
     filtered = df.copy()
 
     if keyword:
-        mask = pd.Series(
-            False, index=filtered.index
-        )
+        mask = pd.Series(False, index=filtered.index)
         for col in ["caller", "phone", "summary"]:
             mask |= filtered[col].fillna("").astype(str).str.contains(
-                keyword,
-                case=False,
-                regex=False,
+                keyword, case=False, regex=False
             )
         filtered = filtered[mask]
 
     if status_filter != "전체":
-        filtered = filtered[
-            filtered["status"] == status_filter
-        ]
+        filtered = filtered[filtered["status"] == status_filter]
 
     display = filtered.rename(columns={
         "call_time": "전화 시간",
@@ -420,14 +396,84 @@ elif page == "전화 기록":
 
     st.download_button(
         "📥 전화 기록 CSV 다운로드",
-        data=display.to_csv(
-            index=False
-        ).encode("utf-8-sig"),
+        data=display.to_csv(index=False).encode("utf-8-sig"),
         file_name="전화_기록.csv",
         mime="text/csv",
     )
 
-elif page == "매출 관리":
+    # 전화번호 수정 또는 지우기
+    st.divider()
+    st.subheader("✏️ 전화번호 수정 / 지우기")
+
+    if df.empty:
+        st.info("수정할 전화 기록이 없습니다.")
+    else:
+        call_options = {
+            f"#{int(row['id'])} | {row['call_time']} | "
+            f"{row['caller'] or '이름 없음'}": int(row["id"])
+            for _, row in df.iterrows()
+        }
+
+        selected_label = st.selectbox(
+            "수정할 전화 기록 선택",
+            list(call_options.keys()),
+            key="edit_phone_select",
+        )
+        selected_id = call_options[selected_label]
+        selected_row = df[df["id"] == selected_id].iloc[0]
+
+        with st.form("edit_phone_form"):
+            new_phone = st.text_input(
+                "전화번호 (빈칸으로 저장하면 번호 삭제)",
+                value=str(selected_row["phone"] or ""),
+            )
+            update_submitted = st.form_submit_button(
+                "전화번호 저장"
+            )
+
+        if update_submitted:
+            try:
+                update_call_phone(selected_id, new_phone)
+                st.success("전화번호를 수정했습니다.")
+                st.rerun()
+            except (sqlite3.Error, OSError):
+                st.error("전화번호 수정에 실패했습니다.")
+
+    # 전화 기록 삭제
+    st.divider()
+    st.subheader("🗑️ 전화 기록 삭제")
+
+    if df.empty:
+        st.info("삭제할 전화 기록이 없습니다.")
+    else:
+        delete_label = st.selectbox(
+            "삭제할 전화 기록 선택",
+            list(call_options.keys()),
+            key="delete_phone_select",
+        )
+        delete_id = call_options[delete_label]
+
+        confirm_call_delete = st.checkbox(
+            "선택한 전화 기록을 삭제하겠습니다.",
+            key="confirm_call_delete",
+        )
+
+        if st.button("선택한 전화 기록 삭제", type="secondary"):
+            if not confirm_call_delete:
+                st.warning("삭제 확인란을 먼저 체크해 주세요.")
+            else:
+                try:
+                    delete_call(delete_id)
+                    st.success("전화 기록을 삭제했습니다.")
+                    st.rerun()
+                except (sqlite3.Error, OSError):
+                    st.error("전화 기록 삭제에 실패했습니다.")
+
+
+# -------------------------
+# 매출 관리 화면
+# -------------------------
+def sales_records_page():
     sales_entry_form()
     st.subheader("💰 매출 내역 목록")
 
@@ -435,72 +481,112 @@ elif page == "매출 관리":
         df = load_sales()
     except (sqlite3.Error, pd.errors.DatabaseError, OSError):
         st.error("매출 내역을 불러오지 못했습니다.")
-        st.stop()
+        return
 
     if df.empty:
         st.info("아직 매출 내역이 없습니다.")
-    else:
-        df["sale_date"] = pd.to_datetime(
-            df["sale_date"], errors="coerce"
-        )
+        return
 
-        min_day = df["sale_date"].min().date()
-        max_day = df["sale_date"].max().date()
+    df["sale_date"] = pd.to_datetime(
+        df["sale_date"], errors="coerce"
+    )
 
-        date_range = st.date_input(
-            "조회 기간",
-            value=(min_day, max_day),
-        )
+    min_day = df["sale_date"].min().date()
+    max_day = df["sale_date"].max().date()
 
-        filtered = df.copy()
+    date_range = st.date_input(
+        "조회 기간", value=(min_day, max_day)
+    )
 
-        if isinstance(date_range, (tuple, list)) and len(date_range) == 2:
-            start_day, end_day = date_range
-            filtered = filtered[
-                (filtered["sale_date"].dt.date >= start_day)
-                & (filtered["sale_date"].dt.date <= end_day)
-            ]
+    filtered = df.copy()
 
-        total_revenue = (
-            int(filtered["total"].sum())
-            if not filtered.empty else 0
-        )
-        total_units = (
-            int(filtered["quantity"].sum())
-            if not filtered.empty else 0
-        )
+    if isinstance(date_range, (tuple, list)) and len(date_range) == 2:
+        start_day, end_day = date_range
+        filtered = filtered[
+            (filtered["sale_date"].dt.date >= start_day)
+            & (filtered["sale_date"].dt.date <= end_day)
+        ]
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("조회 기간 매출", f"{total_revenue:,}원")
-        m2.metric("판매 수량", f"{total_units:,}개")
-        m3.metric("판매 기록", f"{len(filtered):,}건")
+    total_revenue = (
+        int(filtered["total"].sum()) if not filtered.empty else 0
+    )
+    total_units = (
+        int(filtered["quantity"].sum()) if not filtered.empty else 0
+    )
 
-        shown = filtered.rename(columns={
-            "sale_date": "매출 날짜",
-            "product": "상품명",
-            "quantity": "수량",
-            "unit_price": "개당 가격(원)",
-            "total": "매출(원)",
-            "note": "메모",
-        })
+    m1, m2, m3 = st.columns(3)
+    m1.metric("조회 기간 매출", f"{total_revenue:,}원")
+    m2.metric("판매 수량", f"{total_units:,}개")
+    m3.metric("판매 기록", f"{len(filtered):,}건")
 
-        st.dataframe(
-            shown[[
-                "매출 날짜", "상품명", "수량",
-                "개당 가격(원)", "매출(원)", "메모"
-            ]],
-            use_container_width=True,
-            hide_index=True,
-        )
+    shown = filtered.rename(columns={
+        "sale_date": "매출 날짜",
+        "product": "상품명",
+        "quantity": "수량",
+        "unit_price": "개당 가격(원)",
+        "total": "매출(원)",
+        "note": "메모",
+    })
 
-        st.download_button(
-            "📥 매출 내역 CSV 다운로드",
-            data=shown.to_csv(
-                index=False
-            ).encode("utf-8-sig"),
-            file_name="매출_내역.csv",
-            mime="text/csv",
-        )
+    st.dataframe(
+        shown[[
+            "매출 날짜", "상품명", "수량",
+            "개당 가격(원)", "매출(원)", "메모"
+        ]],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.download_button(
+        "📥 매출 내역 CSV 다운로드",
+        data=shown.to_csv(index=False).encode("utf-8-sig"),
+        file_name="매출_내역.csv",
+        mime="text/csv",
+    )
+
+    # 매출 기록 삭제
+    st.divider()
+    st.subheader("🗑️ 매출 기록 삭제")
+
+    sale_options = {
+        f"#{int(row['id'])} | {row['sale_date']} | "
+        f"{row['product']} | {int(row['total']):,}원": int(row["id"])
+        for _, row in df.iterrows()
+    }
+
+    selected_sale_label = st.selectbox(
+        "삭제할 매출 기록 선택",
+        list(sale_options.keys()),
+        key="delete_sale_select",
+    )
+    selected_sale_id = sale_options[selected_sale_label]
+
+    confirm_sale_delete = st.checkbox(
+        "선택한 매출 기록을 삭제하겠습니다.",
+        key="confirm_sale_delete",
+    )
+
+    if st.button("선택한 매출 기록 삭제", type="secondary"):
+        if not confirm_sale_delete:
+            st.warning("삭제 확인란을 먼저 체크해 주세요.")
+        else:
+            try:
+                delete_sale(selected_sale_id)
+                st.success("매출 기록을 삭제했습니다.")
+                st.rerun()
+            except (sqlite3.Error, OSError):
+                st.error("매출 기록 삭제에 실패했습니다.")
+
+
+# -------------------------
+# 메뉴별 화면
+# -------------------------
+if page == "대시보드":
+    dashboard()
+elif page == "전화 기록":
+    phone_records_page()
+elif page == "매출 관리":
+    sales_records_page()
 
 
 st.divider()
