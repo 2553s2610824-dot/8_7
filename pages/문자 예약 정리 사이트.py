@@ -94,50 +94,8 @@ def parse_food_items(food_text: str):
     items = []
     for part in parts:
         part = part.strip(" \t-·")
-        if not part:
-            continue
-        quantity_match = re.search(r"(?:\s+|^)(\d+)\s*(인분|개|그릇|잔|접시|병|명|세트|판|마리|줄|인)?\s*$", part)
-        if quantity_match:
-            quantity = int(quantity_match.group(1))
-            unit = quantity_match.group(2)
-            name = part[:quantity_match.start()].strip()
-            quantity_label = f"{quantity}{unit}"
-        else:
-            # 메뉴 이름에 붙은 숫자는 수량으로 오인하지 않고, 수량이 없으면 표시하지 않습니다.
-            name = part
-            quantity_label = ""
-        if name:
-            items.append({"name": name, "emoji": food_emoji(name), "quantity": quantity_label})
-    return items
-
-
-def parse_reservation(raw_text: str):
-    text = raw_text.strip()
-    if not text:
-        return None, "예약 내용을 입력해 주세요."
-
-    people_match = re.search(r"(\d+)\s*명", text)
-    if not people_match:
-        people_match = re.search(r"(?:인원|인원수)\s*[:：=]?\s*(\d+)", text)
-    if not people_match:
-        return None, "인원수를 찾지 못했어요. 예: 2명, 18:30, 음식: 파스타"
-    people = int(people_match.group(1))
-
-    time_match = re.search(r"(?<!\d)([01]?\d|2[0-3])\s*:\s*([0-5]\d)(?!\d)", text)
-    if time_match:
-        hour, minute = int(time_match.group(1)), int(time_match.group(2))
-    else:
-        time_match = re.search(r"(?<!\d)([01]?\d|2[0-3])\s*시(?:\s*([0-5]?\d)\s*분?)?", text)
-        if not time_match:
-            return None, "예약 시간을 찾지 못했어요. 예: 18:30 또는 18시 30분"
-        hour, minute = int(time_match.group(1)), int(time_match.group(2) or 0)
-
-    food_match = re.search(r"(?:음식|메뉴)\s*[:：=]\s*([^\n]+)", text)
-    if food_match:
-        food_text = food_match.group(1).strip()
-    else:
-        # '2명, 18:30, 삼겹살 2인분, 된장찌개 1개' 형태도 지원합니다.
-        food_text = re.sub(r"\d+\s*명", " ", text)
+        food_text,
+        )
         food_text = re.sub(r"(?<!\d)([01]?\d|2[0-3])\s*:\s*[0-5]\d(?!\d)", " ", food_text)
         food_text = re.sub(r"(?<!\d)([01]?\d|2[0-3])\s*시(?:\s*[0-5]?\d\s*분?)?", " ", food_text)
         food_text = re.sub(r"(?:인원수?|시간)\s*[:：=]?", " ", food_text)
@@ -156,7 +114,7 @@ def parse_reservation(raw_text: str):
         "minute": minute,
         "food": food_text,
         "food_items": food_items,
-        "datetime": datetime.combine(date.today(), time(hour, minute)),
+        "datetime": datetime.combine(reservation_date, time(hour, minute)),
         "raw": raw_text.strip(),
         "created": datetime.now().isoformat(timespec="seconds"),
     }, None
@@ -172,7 +130,7 @@ with left:
         raw_text = st.text_area(
             "예약 내용",
             height=190,
-            placeholder="예시: 4명, 18:30, 삼겹살 2인분, 된장찌개 1개\n\n또는\n인원: 4명 / 시간: 18:30 / 음식: 삼겹살 2인분, 된장찌개 1개",
+            placeholder="예시: 10월 28일, 4명, 18:30, 삼겹살 2인분, 된장찌개 1개\n\n또는\n날짜: 10/28 / 인원: 4명 / 시간: 18:30 / 음식: 삼겹살 2인분, 된장찌개 1개",
             help="인원수, 예약 시간, 음식 종류를 포함한 문자를 붙여 넣어 주세요.",
         )
         if st.button("＋  예약 추가", type="primary", width="stretch"):
@@ -187,8 +145,8 @@ with left:
                 st.rerun()
 
         st.markdown("**입력 예시**")
-        st.code("4명, 18:30, 삼겹살 2인분, 된장찌개 1개", language="text")
-        st.code("인원: 2명 / 시간: 19:00 / 음식: 파스타 2개, 콜라 2잔", language="text")
+        st.code("10월 28일, 4명, 18:30, 삼겹살 2인분, 된장찌개 1개", language="text")
+        st.code("날짜: 10/28 / 인원: 2명 / 시간: 19:00 / 음식: 파스타 2개, 콜라 2잔", language="text")
         st.markdown('<div class="small-note">카카오톡=노랑 · 인스타그램=보라 · 문자=파랑</div>', unsafe_allow_html=True)
 
 with right:
@@ -213,6 +171,8 @@ with right:
                 for item in reservations:
                     style = SOURCE_STYLES[item["source"]]
                     time_label = f'{item["hour"]:02d}:{item["minute"]:02d}'
+                    date_label = item["datetime"].strftime("%m월 %d일")
+                    weekday_label = ["월", "화", "수", "목", "금", "토", "일"][item["datetime"].weekday()]
                     past = item["datetime"] < datetime.now()
                     status = "지난 시간" if past else "예정"
                     food_rows = "".join(
@@ -227,7 +187,10 @@ with right:
                     st.markdown(
                         f'''<div class="reservation-card" style="--card-bg:{style["bg"]}; --card-border:{style["border"]};">
                             <div class="reservation-top">
-                                <div class="reservation-time">{time_label}</div>
+                                <div>
+                                    <div class="reservation-time">{time_label}</div>
+                                    <div style="font-size:.85rem; font-weight:700; margin-top:3px;">📅 {date_label} ({weekday_label})</div>
+                                </div>
                                 <div class="reservation-people">{item["people"]}명 · {status}</div>
                             </div>
                             <div class="menu-count">🍽️ 메뉴 {menu_count}종</div>
