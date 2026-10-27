@@ -1,232 +1,194 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>스마트 키친 (Smart Kitchen) 대시보드</title>
-  <style>
-    :root {
-      --bg-gradient: linear-gradient(135deg, #abb9d3 0%, #8ca1c2 40%, #b8c8d8 70%, #9cb2c9 100%);
-      --card-bg-light: rgba(255, 255, 255, 0.85);
-      --card-bg-dark: #273142;
-      --card-bg-teal: #3d6a7d;
-      --card-bg-slate: #5b6e8a;
-      --text-dark: #1e293b;
-      --text-light: #f8fafc;
-      --text-muted: #64748b;
-      --accent-blue: #3b82f6;
-      --accent-green: #10b981;
-      --accent-orange: #f59e0b;
-      --accent-red: #ef4444;
-      --radius-xl: 28px;
-      --radius-lg: 20px;
-      --radius-md: 14px;
-      --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.08);
-      --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    }
+  <title>스마트 키친</title>
 
+  <style>
     * {
       box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: var(--font-main);
     }
 
     body {
-      background: var(--bg-gradient);
-      min-height: 100vh;
+      margin: 0;
+      padding: 30px;
+      font-family: "Malgun Gothic", sans-serif;
+      background-color: #f5f5f5;
+      color: #222;
+    }
+
+    .container {
+      max-width: 1000px;
+      min-height: 650px;
+      margin: 0 auto;
+      background: white;
+      border: 1px solid #999;
+    }
+
+    .header {
+      margin: 25px auto 20px;
+      width: 70%;
+      padding: 15px;
+      text-align: center;
+      font-size: 23px;
+      letter-spacing: 5px;
+      background: #cfe2f3;
+      border: 6px ridge #777;
+    }
+
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 35px 45px;
+      max-width: 700px;
+      margin: 20px auto 40px;
+      padding: 0 15px;
+    }
+
+    .menu {
+      min-height: 180px;
+      border-radius: 28% / 35%;
       display: flex;
       justify-content: center;
       align-items: center;
-      padding: 24px;
-      color: var(--text-dark);
-    }
-
-    .app-container {
-      width: 100%;
-      max-width: 1200px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    /* Header Styling */
-    .app-header {
-      background: rgba(255, 255, 255, 0.65);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid rgba(255, 255, 255, 0.5);
-      border-radius: var(--radius-xl);
-      padding: 20px 28px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: var(--shadow-soft);
-    }
-
-    .header-title-zone h1 {
-      font-size: 24px;
-      font-weight: 700;
-      color: #1e293b;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .header-title-zone p {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(16, 185, 129, 0.15);
-      color: #065f46;
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      background-color: #10b981;
-      border-radius: 50%;
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-    }
-
-    /* Main Grid Layout */
-    .dashboard-grid {
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap: 20px;
-    }
-
-    /* Base Card Style */
-    .widget-card {
-      border-radius: var(--radius-xl);
-      padding: 24px;
-      box-shadow: var(--shadow-soft);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .widget-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 14px 35px rgba(0,0,0,0.12);
-    }
-
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-
-    .card-title {
-      font-size: 18px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .card-btn {
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
-      color: inherit;
-      padding: 8px 14px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
+      text-align: center;
+      padding: 20px;
+      font-size: 19px;
+      line-height: 1.7;
       cursor: pointer;
-      backdrop-filter: blur(4px);
-      transition: background 0.2s;
+      transition: transform 0.2s, box-shadow 0.2s;
     }
 
-    .card-btn:hover {
-      background: rgba(255, 255, 255, 0.35);
+    .menu:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 6px 14px #0002;
     }
 
-    /* Card Themes */
-    .card-white {
-      background: var(--card-bg-light);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.6);
-      color: var(--text-dark);
+    .menu:focus-visible {
+      outline: 3px solid #333;
+      outline-offset: 4px;
     }
 
-    .card-dark {
-      background: var(--card-bg-dark);
-      color: var(--text-light);
+    .pink {
+      background: #f4cccc;
+      border: 1px solid #ff6666;
     }
 
-    .card-teal {
-      background: var(--card-bg-teal);
-      color: var(--text-light);
+    .orange {
+      background: #fce5cd;
+      border: 1px solid #ffab66;
     }
 
-    .card-slate {
-      background: var(--card-bg-slate);
-      color: var(--text-light);
+    .blue {
+      background: #c9daf8;
+      border: 1px solid #4d85ff;
     }
 
-    /* Specific Grid Spans */
-    .span-7 { grid-column: span 7; }
-    .span-5 { grid-column: span 5; }
-    .span-6 { grid-column: span 6; }
-
-    @media (max-width: 900px) {
-      .span-7, .span-5, .span-6 { grid-column: span 12; }
+    .green {
+      background: #d9ead3;
+      border: 1px solid #6aa84f;
     }
 
-    /* Common List & Elements */
-    .item-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      flex: 1;
+    .content {
+      margin: 0 25px 25px;
+      padding: 20px;
+      border-top: 1px solid #eee;
+      min-height: 80px;
+      text-align: center;
+      line-height: 1.8;
     }
 
-    .list-item {
-      padding: 14px;
-      border-radius: var(--radius-md);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      transition: background 0.2s;
-    }
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
 
-    .card-white .list-item {
-      background: rgba(241, 245, 249, 0.8);
-    }
+      .container {
+        min-height: 90vh;
+      }
 
-    .card-dark .list-item,
-    .card-teal .list-item,
-    .card-slate .list-item {
-      background: rgba(255, 255, 255, 0.1);
-    }
+      .header {
+        width: 90%;
+        font-size: 18px;
+        letter-spacing: 2px;
+      }
 
-    .tag {
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
+      .menu-grid {
+        gap: 18px;
+      }
 
-    .tag-blue { background: rgba(59, 130, 246, 0.2); color: #2563eb; }
-    .tag-green { background: rgba
+      .menu {
+        min-height: 140px;
+        padding: 10px;
+        font-size: 15px;
+        border-radius: 25%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="container">
+
+    <header class="header">
+      스마트 키친
+    </header>
+
+    <section class="menu-grid" aria-label="주요 메뉴">
+
+      <button class="menu pink"
+        onclick="showPage('AI 주방 매니저')">
+        AI 주방 매니저
+      </button>
+
+      <button class="menu orange"
+        onclick="showPage('전화 실시간 정리표')">
+        전화 실시간 정리표
+      </button>
+
+      <button class="menu blue"
+        onclick="showPage('주문 폭주 자동 방어 시스템')">
+        주문 폭주 자동 방어 시스템
+      </button>
+
+      <button class="menu green"
+        onclick="showPage('문자 예약 정리 사이트')">
+        문자 예약 정리 사이트
+      </button>
+
+    </section>
+
+    <section class="content" id="content" aria-live="polite">
+      원하는 메뉴를 선택해 주세요.
+    </section>
+
+  </main>
+
+  <script>
+    function showPage(pageName) {
+      const content = document.getElementById("content");
+
+      const descriptions = {
+        "AI 주방 매니저":
+          "식재료 재고, 조리 순서 및 주방 업무를 관리하는 기능입니다.",
+
+        "전화 실시간 정리표":
+          "전화로 접수된 주문과 문의 내용을 실시간으로 정리하는 기능입니다.",
+
+        "주문 폭주 자동 방어 시스템":
+          "주문량을 확인하고 주문이 몰릴 때 주방 업무를 효율적으로 관리하는 기능입니다.",
+
+        "문자 예약 정리 사이트":
+          "문자로 접수된 예약 내용과 예약 일정을 한눈에 확인하는 기능입니다."
+      };
+
+      content.innerHTML =
+        "<h2>" + pageName + "</h2>" +
+        "<p>" + descriptions[pageName] + "</p>" +
+        "<p>선택한 메뉴: " + pageName + "</p>";
+    }
+  </script>
+</body>
+</html>
