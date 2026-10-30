@@ -62,20 +62,18 @@ with st.sidebar:
 # ---------------------------------------------------------
 # 3. 핵심 계산 및 상태 문구 판별
 # ---------------------------------------------------------
-# 현재 대기수 및 예상 대기시간 계산
 current_waiting = st.session_state.waiting_count
 estimated_wait_time = current_waiting * st.session_state.avg_time_per_team
 
-# 수용 한도 초과 및 차단 여부
 is_limit_reached = current_waiting >= st.session_state.max_capacity
 is_blocked = st.session_state.auto_guard_active and is_limit_reached
 
 # ---------------------------------------------------------
-# 4. 실시간 상태 배너 & 영역별 커스텀 카드 UI
+# 4. 실시간 상태 배너 & 지표 카드 UI
 # ---------------------------------------------------------
 st.title("🚨 주문 폭주 자동 방어 시스템")
 
-# [1] 상태 안내 배너
+# [1] 실시간 주문 상태 배너
 if is_blocked:
     st.markdown(
         """
@@ -131,7 +129,7 @@ else:
         unsafe_allow_html=True
     )
 
-# [2] 현재 대기수 & 예상 대기시간 각각 카드형 테두리 적용
+# [2] 대기수 & 대기시간 카드
 col1, col2 = st.columns(2)
 
 with col1:
@@ -182,47 +180,74 @@ with col2:
         unsafe_allow_html=True
     )
 
-st.divider()
+st.write("") # 간격 조정
 
 # ---------------------------------------------------------
-# 5. 주문 입력 및 대기 처리 기능
+# 5. 카드 스타일별 기능 영역 (접수 / 관리 / 내역)
 # ---------------------------------------------------------
 left_col, right_col = st.columns([1, 1])
 
-# --- [좌측] 신규 주문 접수폼 ---
+# --- [좌측] 신규 주문 / 예약 접수 카드 ---
 with left_col:
-    st.subheader("📥 신규 주문/예약 접수")
+    st.markdown(
+        """
+        <div style="
+            background-color: #f6ffed;
+            border: 2px solid #52c41a;
+            border-radius: 12px;
+            padding: 16px 20px 8px 20px;
+            margin-bottom: 12px;
+        ">
+            <h4 style="margin: 0; color: #274e13;">📥 신규 주문 / 예약 접수</h4>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     
-    with st.form("order_form", clear_on_submit=True):
-        customer_info = st.text_input("고객명 / 연락처 뒷자리", placeholder="예: 홍길동 / 5678")
-        channel = st.selectbox("접수 채널", ["전화", "문자/메신저", "현장 방문", "배달 앱"])
-        memo = st.text_input("주문 내용 및 요청사항", placeholder="예: 메인 메뉴 2개, 3명 방문")
-        
-        submit = st.form_submit_button("주문 등록", use_container_width=True)
-        
-        if submit:
-            if not customer_info.strip():
-                st.error("고객 정보를 입력해주세요.")
-            elif is_blocked:
-                st.error("❌ 현재 주문량이 너무 많아 신규 주문을 등록할 수 없습니다.")
-            else:
-                now_time = datetime.datetime.now().strftime("%H:%M:%S")
-                st.session_state.order_history.insert(0, {
-                    "time": now_time,
-                    "info": customer_info,
-                    "channel": channel,
-                    "memo": memo
-                })
-                st.session_state.waiting_count += 1
-                st.success(f"✅ 주문이 접수되었습니다. (현재 대기수: {st.session_state.waiting_count}팀)")
-                st.rerun()
+    with st.container():
+        with st.form("order_form", clear_on_submit=True):
+            customer_info = st.text_input("고객명 / 연락처 뒷자리", placeholder="예: 홍길동 / 5678")
+            channel = st.selectbox("접수 채널", ["전화", "문자/메신저", "현장 방문", "배달 앱"])
+            memo = st.text_input("주문 내용 및 요청사항", placeholder="예: 메인 메뉴 2개, 3명 방문")
+            
+            submit = st.form_submit_button("주문 등록", use_container_width=True)
+            
+            if submit:
+                if not customer_info.strip():
+                    st.error("고객 정보를 입력해주세요.")
+                elif is_blocked:
+                    st.error("❌ 현재 주문량이 너무 많아 신규 주문을 등록할 수 없습니다.")
+                else:
+                    now_time = datetime.datetime.now().strftime("%H:%M:%S")
+                    st.session_state.order_history.insert(0, {
+                        "time": now_time,
+                        "info": customer_info,
+                        "channel": channel,
+                        "memo": memo
+                    })
+                    st.session_state.waiting_count += 1
+                    st.success(f"✅ 주문이 접수되었습니다. (현재 대기수: {st.session_state.waiting_count}팀)")
+                    st.rerun()
 
-# --- [우측] 실시간 대기 차감/관리 ---
+# --- [우측] 대기 수 관리 & 최근 접수 내역 카드 ---
 with right_col:
-    st.subheader("⚡ 대기 수 관리")
+    # 1. 대기 수 관리 카드
+    st.markdown(
+        """
+        <div style="
+            background-color: #f9f0ff;
+            border: 2px solid #722ed1;
+            border-radius: 12px;
+            padding: 16px 20px 8px 20px;
+            margin-bottom: 12px;
+        ">
+            <h4 style="margin: 0; color: #391085;">⚡ 대기 수 관리</h4>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     
     btn_col1, btn_col2 = st.columns(2)
-    
     with btn_col1:
         if st.button("➕ 수동 대기 1팀 추가", use_container_width=True):
             if is_blocked:
@@ -240,9 +265,41 @@ with right_col:
             else:
                 st.warning("현재 대기 중인 팀이 없습니다.")
 
-    st.subheader("📋 최근 접수 내역")
+    st.write("") # 간격
+
+    # 2. 최근 접수 내역 카드
+    st.markdown(
+        """
+        <div style="
+            background-color: #f5f5f5;
+            border: 2px solid #d9d9d9;
+            border-radius: 12px;
+            padding: 16px 20px 8px 20px;
+            margin-bottom: 12px;
+        ">
+            <h4 style="margin: 0; color: #262626;">📋 최근 접수 내역</h4>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
     if not st.session_state.order_history:
         st.info("접수된 주문 내역이 없습니다.")
     else:
         for item in st.session_state.order_history[:5]:
-            st.write(f"• [{item['time']}] **{item['info']}** ({item['channel']}) - {item['memo']}")
+            st.markdown(
+                f"""
+                <div style="
+                    background-color: #ffffff;
+                    border: 1px solid #e8e8e8;
+                    border-radius: 8px;
+                    padding: 10px 14px;
+                    margin-bottom: 8px;
+                    font-size: 14px;
+                ">
+                    ⏱️ <b>[{item['time']}]</b> <b>{item['info']}</b> ({item['channel']})<br/>
+                    <span style="color: #595959;">📝 {item['memo'] if item['memo'] else '요청사항 없음'}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
