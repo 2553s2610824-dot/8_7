@@ -447,6 +447,23 @@ with right:
                         </div>''',
                         unsafe_allow_html=True,
                     )
+                                        # 개별 예약 삭제 버튼
+                    delete_key = item.get("id") or item.get("created") or str(id(item))
+
+                    if st.button(
+                        "🗑️ 이 예약 삭제",
+                        key=f"delete_reservation_{delete_key}",
+                        width="stretch",
+                    ):
+                        st.session_state.reservations = [
+                            reservation
+                            for reservation in st.session_state.reservations
+                            if reservation is not item
+                        ]
+
+                        save_reservations()
+                        st.toast("선택한 예약을 삭제했어요.", icon="✅")
+                        st.rerun()
             else:
                 st.markdown(
                     '<div class="empty-state"><div class="empty-icon">🗓️</div><b>아직 등록된 예약이 없어요.</b><br>왼쪽에서 예약 문자를 입력해 추가해 주세요.</div>',
