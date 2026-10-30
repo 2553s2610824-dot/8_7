@@ -69,37 +69,48 @@ is_limit_reached = current_waiting >= st.session_state.max_capacity
 is_blocked = st.session_state.auto_guard_active and is_limit_reached
 
 # ---------------------------------------------------------
-# 4. 주문 차단 시 전체 배경 및 글자색 가독성 보완 CSS
+# 4. 대기 수 증가에 비례하여 배경색이 점진적으로 빨개지는 CSS 계산
 # ---------------------------------------------------------
-if is_blocked:
-    st.markdown(
-        """
-        <style>
-        /* 1. 메인 바탕만 경고 빨간색으로 변경 */
-        .stApp {
-            background-color: #990000 !important;
-            transition: background-color 0.4s ease;
-        }
-        /* 2. 메인 타이틀만 선명한 흰색으로 표시 */
-        .stApp > header, .stApp h1 {
-            color: #ffffff !important;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
-        }
-        /* 3. 흰색/회색 카드 박스 내부의 모든 라벨, 텍스트, 입력폼 라벨은 진한 검은색 유지 */
-        div[data-testid="stForm"], div[data-testid="stVerticalBlock"] > div {
-            color: #111111;
-        }
-        label, .stMarkdown, p, span {
-            color: #111111 !important;
-        }
-        /* 상단 타이틀 예외 처리 (타이틀만 흰색 유지) */
-        h1 span, h1 {
-            color: #ffffff !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+# 대기율 (0.0 ~ 1.0)
+ratio = min(1.0, max(0.0, current_waiting / st.session_state.max_capacity))
+
+if ratio == 0:
+    # 대기 팀이 0일 때는 기본 배경 유지 (스타일 적용 안 함)
+    bg_style = ""
+else:
+    # 0팀일 때의 연한 회색/분홍색에서 한도 도달 시 진한 빨간색(#990000)까지 RGB 보간
+    # R: 255 고정 / G, B: 대기율이 올라갈수록 낮아짐 (점점 더 붉어짐)
+    g_val = int(245 - (ratio * 205))  # 245 -> 40
+    b_val = int(245 - (ratio * 205))  # 245 -> 40
+    bg_color = f"rgb(255, {g_val}, {b_val})"
+    
+    # 한도 도달 시 글자색 대비 처리
+    title_color = "#ffffff" if ratio >= 0.8 else "#111111"
+
+    bg_style = f"""
+    <style>
+    .stApp {{
+        background-color: {bg_color} !important;
+        transition: background-color 0.4s ease-in-out;
+    }}
+    .stApp > header, .stApp h1 {{
+        color: {title_color} !important;
+        text-shadow: { '1px 1px 3px rgba(0,0,0,0.5)' if ratio >= 0.8 else 'none' };
+    }}
+    div[data-testid="stForm"], div[data-testid="stVerticalBlock"] > div {{
+        color: #111111;
+    }}
+    label, .stMarkdown, p, span {{
+        color: #111111 !important;
+    }}
+    h1 span, h1 {{
+        color: {title_color} !important;
+    }}
+    </style>
+    """
+
+if bg_style:
+    st.markdown(bg_style, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # 5. 실시간 상태 배너 & 지표 카드 UI
@@ -111,7 +122,7 @@ if is_blocked:
     st.markdown(
         """
         <div style="
-            background-color: #ff3333;
+            background-color: #d90429;
             border: 2px solid #ffffff;
             color: #ffffff !important;
             padding: 16px 20px;
@@ -220,7 +231,7 @@ with col2:
 st.write("") # 간격 조정
 
 # ---------------------------------------------------------
-# 6. 회색 카드 테두리로 감싼 기능 영역 (입력칸 글자 가독성 보완)
+# 6. 회색 카드 테두리로 감싼 기능 영역
 # ---------------------------------------------------------
 left_col, right_col = st.columns([1, 1])
 
