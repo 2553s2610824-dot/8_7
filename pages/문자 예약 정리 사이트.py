@@ -380,7 +380,10 @@ with right:
             ),
         )
 
-        total_people = sum(item["people"] for item in reservations)
+        total_people = sum(
+    int(item.get("people", 0))
+    for item in reservations
+)
         total_menu_kinds = sum(
             len(item.get("food_items", []))
             for item in reservations
