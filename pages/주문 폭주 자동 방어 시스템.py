@@ -69,7 +69,28 @@ is_limit_reached = current_waiting >= st.session_state.max_capacity
 is_blocked = st.session_state.auto_guard_active and is_limit_reached
 
 # ---------------------------------------------------------
-# 4. 실시간 상태 배너 & 지표 카드 UI (회색 톤 적용)
+# 4. 주문 차단 시 전체 배경색 빨간색으로 동적 변경
+# ---------------------------------------------------------
+if is_blocked:
+    # 전체 화면 배경을 눈에 띄는 빨간색으로 적용
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background-color: #8b0000 !important;
+            transition: background-color 0.5s ease;
+        }
+        /* 글자색이 안 보이는 현상 방지를 위해 타이틀 및 기본 텍스트 하얀색 강조 */
+        .stApp h1, .stApp p, .stApp div, .stApp span, .stApp label {
+            color: #ffffff !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+# ---------------------------------------------------------
+# 5. 실시간 상태 배너 & 지표 카드 UI
 # ---------------------------------------------------------
 st.title("🚨 주문 폭주 자동 방어 시스템")
 
@@ -78,14 +99,15 @@ if is_blocked:
     st.markdown(
         """
         <div style="
-            background-color: #f0f0f0;
-            border: 2px solid #595959;
-            color: #262626;
+            background-color: #ff4d4f;
+            border: 2px solid #ffffff;
+            color: #ffffff !important;
             padding: 16px 20px;
             border-radius: 10px;
             font-size: 20px;
             font-weight: bold;
             margin-bottom: 20px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         ">
             ⛔ 현재 주문량이 너무 많습니다. <span style="font-size:15px; font-weight:normal;">(신규 주문 자동 차단 중)</span>
         </div>
@@ -129,7 +151,7 @@ else:
         unsafe_allow_html=True
     )
 
-# [2] 현재 대기수 & 예상 대기시간 카드 (회색 통일)
+# [2] 현재 대기수 & 예상 대기시간 카드
 col1, col2 = st.columns(2)
 
 with col1:
@@ -183,7 +205,7 @@ with col2:
 st.write("") # 간격 조정
 
 # ---------------------------------------------------------
-# 5. 회색 카드 테두리로 감싼 전체 기능 영역
+# 6. 전체 기능 영역 (입력폼/대기관리/내역)
 # ---------------------------------------------------------
 left_col, right_col = st.columns([1, 1])
 
