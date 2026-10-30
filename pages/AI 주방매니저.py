@@ -16,7 +16,7 @@ except ImportError:
 # 1. 기본 설정
 # =========================
 st.set_page_config(
-    page_title="AI 주방매니저",
+    page_title="한눈에 보는 주방 현황",
     page_icon="🍳",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -296,7 +296,7 @@ with st.sidebar:
 # =========================
 st.markdown("""
 <div class="hero">
-    <h1>🍳 주방 운영, 한 화면에서 똑똑하게.</h1>
+    <h1>🍳 한눈에 보는 주방 현황</h1>
     <p>
         재고 분석부터 유통기한, 장보기, 예약까지
         한곳에서 관리하세요.
