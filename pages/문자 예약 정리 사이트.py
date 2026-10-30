@@ -436,7 +436,7 @@ with right:
                                     </div>
                                 </div>
                                 <div class="reservation-people">
-                                    {item["people"]}명 · {status}
+                                    {item.get("people", 0)}명 · {status}
                                 </div>
                             </div>
                             <div class="menu-count">🍽️ 메뉴 {menu_count}종</div>
