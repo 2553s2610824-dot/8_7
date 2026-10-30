@@ -39,21 +39,58 @@ FOOD_EMOJI_RULES = [
 
 
 # 예약 파일에 저장
+# 예약 파일에 저장
 def save_reservations():
     try:
         saved_data = []
 
         for item in st.session_state.reservations:
             saved_item = item.copy()
-            saved_item["datetime"] = item["datetime"].isoformat()
+
+            reservation_datetime = item.get("datetime")
+
+            # 날짜 정보가 문자열이면 datetime 형식으로 변환
+            if isinstance(reservation_datetime, str):
+                try:
+                    reservation_datetime = datetime.fromisoformat(
+                        reservation_datetime
+                    )
+                except ValueError:
+                    reservation_datetime = None
+
+            # 날짜 정보가 없는 예전 예약 복구
+            if not isinstance(reservation_datetime, datetime):
+                raw_text = item.get("raw", "")
+
+                recovered, error = parse_reservation(raw_text)
+
+                if recovered:
+                    reservation_datetime = recovered["datetime"]
+                else:
+                    hour = int(item.get("hour", 0))
+                    minute = int(item.get("minute", 0))
+
+                    reservation_datetime = datetime.combine(
+                        date.today(),
+                        time(hour, minute)
+                    )
+
+            # 기존 예약에도 날짜 정보 적용
+            item["datetime"] = reservation_datetime
+            saved_item["datetime"] = reservation_datetime.isoformat()
+
             saved_data.append(saved_item)
 
         with open(SAVE_FILE, "w", encoding="utf-8") as file:
-            json.dump(saved_data, file, ensure_ascii=False, indent=4)
+            json.dump(
+                saved_data,
+                file,
+                ensure_ascii=False,
+                indent=4
+            )
 
     except (OSError, TypeError, ValueError) as e:
         st.warning(f"예약 저장 중 문제가 발생했어요: {e}")
-
 
 # 저장된 예약 불러오기
 def load_reservations():
