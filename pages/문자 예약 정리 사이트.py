@@ -1,4 +1,3 @@
-
 import re
 import json
 import os
@@ -37,6 +36,7 @@ FOOD_EMOJI_RULES = [
     (("케이크", "디저트", "아이스크림", "빙수", "쿠키", "초콜릿", "푸딩"), "🍰"),
     (("계란", "달걀", "오믈렛", "계란찜"), "🍳"),
 ]
+
 
 # 예약 파일에 저장
 def save_reservations():
@@ -279,6 +279,13 @@ with left:
 
         source = st.selectbox("연락이 들어온 앱", list(SOURCE_STYLES.keys()))
 
+        # 예약자명 입력
+        customer_name = st.text_input(
+            "예약자명",
+            placeholder="예: 홍길동",
+            help="입력한 예약자명이 오른쪽 예약 카드에도 표시됩니다.",
+        )
+
         raw_text = st.text_area(
             "예약 내용",
             height=190,
@@ -296,6 +303,7 @@ with left:
             if error:
                 st.error(error)
             else:
+                reservation["customer_name"] = customer_name.strip() or "이름 미입력"
                 reservation["source"] = source
                 reservation["id"] = reservation["created"]
                 st.session_state.reservations.append(reservation)
@@ -328,12 +336,12 @@ with right:
         )
 
         reservations = sorted(
-    st.session_state.reservations,
-    key=lambda item: (
-        item.get("datetime", datetime.max) < datetime.now(),
-        item.get("datetime", datetime.max),
-    ),
-)
+            st.session_state.reservations,
+            key=lambda item: (
+                item.get("datetime", datetime.max) < datetime.now(),
+                item.get("datetime", datetime.max),
+            ),
+        )
 
         total_people = sum(item["people"] for item in reservations)
         total_menu_kinds = sum(
@@ -352,6 +360,7 @@ with right:
                     style = SOURCE_STYLES[item["source"]]
 
                     time_label = f'{item["hour"]:02d}:{item["minute"]:02d}'
+                    customer_name_label = item.get("customer_name", "이름 미입력")
                     date_label = item["datetime"].strftime("%m월 %d일")
                     weekday_label = [
                         "월", "화", "수", "목", "금", "토", "일"
@@ -378,6 +387,9 @@ with right:
                         f'''<div class="reservation-card" style="--card-bg:{style["bg"]}; --card-border:{style["border"]};">
                             <div class="reservation-top">
                                 <div>
+                                    <div style="font-size:.95rem; font-weight:800; margin-bottom:4px;">
+                                        👤 {customer_name_label}
+                                    </div>
                                     <div class="reservation-time">{time_label}</div>
                                     <div style="font-size:.85rem; font-weight:700; margin-top:3px;">
                                         📅 {date_label} ({weekday_label})
