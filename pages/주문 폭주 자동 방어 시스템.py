@@ -71,27 +71,59 @@ is_limit_reached = current_waiting >= st.session_state.max_capacity
 is_blocked = st.session_state.auto_guard_active and is_limit_reached
 
 # ---------------------------------------------------------
-# 4. 실시간 상태 배너 (요청 문구 및 색상 반영)
+# 4. 실시간 상태 배너 & 영역별 커스텀 카드 UI
 # ---------------------------------------------------------
 st.title("🚨 주문 폭주 자동 방어 시스템")
 
-# [요청 문구 1 & 2] 주문 가능 여부 및 폭주 상태 표시
+# [1] 상태 안내 배너
 if is_blocked:
-    st.error("⛔ **현재 주문량이 너무 많습니다.** (신규 주문 자동 차단 중)")
+    st.markdown(
+        """
+        <div style="
+            background-color: #ffebe9;
+            border: 2px solid #ff4d4f;
+            color: #d90429;
+            padding: 16px 20px;
+            border-radius: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        ">
+            ⛔ 현재 주문량이 너무 많습니다. <span style="font-size:15px; font-weight:normal;">(신규 주문 자동 차단 중)</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 elif is_limit_reached and not st.session_state.auto_guard_active:
-    st.warning("⚠️ **현재 주문량이 너무 많습니다.** (경고: 자동 방어가 꺼져 있습니다)")
+    st.markdown(
+        """
+        <div style="
+            background-color: #fffbe6;
+            border: 2px solid #ffe58f;
+            color: #d48806;
+            padding: 16px 20px;
+            border-radius: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        ">
+            ⚠️ 현재 주문량이 너무 많습니다. <span style="font-size:15px; font-weight:normal;">(경고: 자동 방어가 꺼져 있습니다)</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 else:
-    # 진한 초록색 커스텀 스타일 배너 적용
     st.markdown(
         """
         <div style="
             background-color: #0b6623;
             color: #ffffff;
-            padding: 14px 20px;
-            border-radius: 8px;
-            font-size: 18px;
+            padding: 16px 20px;
+            border-radius: 10px;
+            font-size: 20px;
             font-weight: bold;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         ">
             🟢 현재 주문이 가능합니다.
         </div>
@@ -99,23 +131,55 @@ else:
         unsafe_allow_html=True
     )
 
-# [요청 문구 3 & 4] 현재 대기수 및 예상 대기시간 대시보드
+# [2] 현재 대기수 & 예상 대기시간 각각 카드형 테두리 적용
 col1, col2 = st.columns(2)
 
 with col1:
-    st.metric(
-        label="현재 대기수:",
-        value=f"{current_waiting} 팀",
-        delta=f"최대 {st.session_state.max_capacity}팀 수용 가능" if not is_limit_reached else "수용 한도 도달",
-        delta_color="off" if not is_limit_reached else "inverse"
+    st.markdown(
+        f"""
+        <div style="
+            background-color: #f0f7ff;
+            border: 2px solid #1890ff;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        ">
+            <div style="color: #434343; font-size: 16px; font-weight: bold; margin-bottom: 8px;">
+                👥 현재 대기수:
+            </div>
+            <div style="color: #0958d9; font-size: 38px; font-weight: 800; margin-bottom: 6px;">
+                {current_waiting} 팀
+            </div>
+            <div style="color: #8c8c8c; font-size: 13px;">
+                (최대 {st.session_state.max_capacity}팀 수용 가능)
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
 with col2:
-    st.metric(
-        label="예상 대기시간:",
-        value=f"약 {estimated_wait_time} 분",
-        delta=f"팀당 평균 {st.session_state.avg_time_per_team}분 소요",
-        delta_color="off"
+    st.markdown(
+        f"""
+        <div style="
+            background-color: #fff7e6;
+            border: 2px solid #ffa940;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        ">
+            <div style="color: #434343; font-size: 16px; font-weight: bold; margin-bottom: 8px;">
+                ⏱️ 예상 대기시간:
+            </div>
+            <div style="color: #d46b08; font-size: 38px; font-weight: 800; margin-bottom: 6px;">
+                약 {estimated_wait_time} 분
+            </div>
+            <div style="color: #8c8c8c; font-size: 13px;">
+                (팀당 평균 {st.session_state.avg_time_per_team}분 기준)
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
 
 st.divider()
