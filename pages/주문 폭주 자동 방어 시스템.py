@@ -69,19 +69,31 @@ is_limit_reached = current_waiting >= st.session_state.max_capacity
 is_blocked = st.session_state.auto_guard_active and is_limit_reached
 
 # ---------------------------------------------------------
-# 4. 주문 차단 시 전체 배경색 빨간색으로 동적 변경
+# 4. 주문 차단 시 전체 배경 및 글자색 가독성 보완 CSS
 # ---------------------------------------------------------
 if is_blocked:
-    # 전체 화면 배경을 눈에 띄는 빨간색으로 적용
     st.markdown(
         """
         <style>
+        /* 1. 메인 바탕만 경고 빨간색으로 변경 */
         .stApp {
-            background-color: #8b0000 !important;
-            transition: background-color 0.5s ease;
+            background-color: #990000 !important;
+            transition: background-color 0.4s ease;
         }
-        /* 글자색이 안 보이는 현상 방지를 위해 타이틀 및 기본 텍스트 하얀색 강조 */
-        .stApp h1, .stApp p, .stApp div, .stApp span, .stApp label {
+        /* 2. 메인 타이틀만 선명한 흰색으로 표시 */
+        .stApp > header, .stApp h1 {
+            color: #ffffff !important;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+        }
+        /* 3. 흰색/회색 카드 박스 내부의 모든 라벨, 텍스트, 입력폼 라벨은 진한 검은색 유지 */
+        div[data-testid="stForm"], div[data-testid="stVerticalBlock"] > div {
+            color: #111111;
+        }
+        label, .stMarkdown, p, span {
+            color: #111111 !important;
+        }
+        /* 상단 타이틀 예외 처리 (타이틀만 흰색 유지) */
+        h1 span, h1 {
             color: #ffffff !important;
         }
         </style>
@@ -99,7 +111,7 @@ if is_blocked:
     st.markdown(
         """
         <div style="
-            background-color: #ff4d4f;
+            background-color: #ff3333;
             border: 2px solid #ffffff;
             color: #ffffff !important;
             padding: 16px 20px;
@@ -108,8 +120,9 @@ if is_blocked:
             font-weight: bold;
             margin-bottom: 20px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            text-align: center;
         ">
-            ⛔ 현재 주문량이 너무 많습니다. <span style="font-size:15px; font-weight:normal;">(신규 주문 자동 차단 중)</span>
+            ⛔ 현재 주문량이 너무 많습니다. <span style="font-size:16px; font-weight:normal; color:#ffffff !important;">(신규 주문 자동 차단 중)</span>
         </div>
         """,
         unsafe_allow_html=True
@@ -120,14 +133,14 @@ elif is_limit_reached and not st.session_state.auto_guard_active:
         <div style="
             background-color: #f5f5f5;
             border: 2px solid #8c8c8c;
-            color: #262626;
+            color: #262626 !important;
             padding: 16px 20px;
             border-radius: 10px;
             font-size: 20px;
             font-weight: bold;
             margin-bottom: 20px;
         ">
-            ⚠️ 현재 주문량이 너무 많습니다. <span style="font-size:15px; font-weight:normal;">(경고: 자동 방어가 꺼져 있습니다)</span>
+            ⚠️ 현재 주문량이 너무 많습니다. <span style="font-size:15px; font-weight:normal; color:#595959 !important;">(경고: 자동 방어가 꺼져 있습니다)</span>
         </div>
         """,
         unsafe_allow_html=True
@@ -137,7 +150,7 @@ else:
         """
         <div style="
             background-color: #434343;
-            color: #ffffff;
+            color: #ffffff !important;
             padding: 16px 20px;
             border-radius: 10px;
             font-size: 20px;
@@ -158,19 +171,20 @@ with col1:
     st.markdown(
         f"""
         <div style="
-            background-color: #f5f5f5;
+            background-color: #ffffff;
             border: 2px solid #d9d9d9;
             border-radius: 12px;
             padding: 20px;
             text-align: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         ">
-            <div style="color: #434343; font-size: 16px; font-weight: bold; margin-bottom: 8px;">
+            <div style="color: #333333 !important; font-size: 16px; font-weight: bold; margin-bottom: 8px;">
                 👥 현재 대기수:
             </div>
-            <div style="color: #1f1f1f; font-size: 38px; font-weight: 800; margin-bottom: 6px;">
+            <div style="color: #111111 !important; font-size: 38px; font-weight: 800; margin-bottom: 6px;">
                 {current_waiting} 팀
             </div>
-            <div style="color: #8c8c8c; font-size: 13px;">
+            <div style="color: #666666 !important; font-size: 13px;">
                 (최대 {st.session_state.max_capacity}팀 수용 가능)
             </div>
         </div>
@@ -182,19 +196,20 @@ with col2:
     st.markdown(
         f"""
         <div style="
-            background-color: #f5f5f5;
+            background-color: #ffffff;
             border: 2px solid #d9d9d9;
             border-radius: 12px;
             padding: 20px;
             text-align: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         ">
-            <div style="color: #434343; font-size: 16px; font-weight: bold; margin-bottom: 8px;">
+            <div style="color: #333333 !important; font-size: 16px; font-weight: bold; margin-bottom: 8px;">
                 ⏱️ 예상 대기시간:
             </div>
-            <div style="color: #1f1f1f; font-size: 38px; font-weight: 800; margin-bottom: 6px;">
+            <div style="color: #111111 !important; font-size: 38px; font-weight: 800; margin-bottom: 6px;">
                 약 {estimated_wait_time} 분
             </div>
-            <div style="color: #8c8c8c; font-size: 13px;">
+            <div style="color: #666666 !important; font-size: 13px;">
                 (팀당 평균 {st.session_state.avg_time_per_team}분 기준)
             </div>
         </div>
@@ -205,7 +220,7 @@ with col2:
 st.write("") # 간격 조정
 
 # ---------------------------------------------------------
-# 6. 전체 기능 영역 (입력폼/대기관리/내역)
+# 6. 회색 카드 테두리로 감싼 기능 영역 (입력칸 글자 가독성 보완)
 # ---------------------------------------------------------
 left_col, right_col = st.columns([1, 1])
 
@@ -215,13 +230,13 @@ with left_col:
         st.markdown(
             """
             <div style="
-                background-color: #f5f5f5;
+                background-color: #f0f0f0;
                 border-left: 5px solid #595959;
                 padding: 10px 14px;
                 border-radius: 4px;
                 margin-bottom: 15px;
             ">
-                <h4 style="margin: 0; color: #262626;">📥 신규 주문 / 예약 접수</h4>
+                <h4 style="margin: 0; color: #111111 !important;">📥 신규 주문 / 예약 접수</h4>
             </div>
             """,
             unsafe_allow_html=True
@@ -258,13 +273,13 @@ with right_col:
         st.markdown(
             """
             <div style="
-                background-color: #f5f5f5;
+                background-color: #f0f0f0;
                 border-left: 5px solid #595959;
                 padding: 10px 14px;
                 border-radius: 4px;
                 margin-bottom: 15px;
             ">
-                <h4 style="margin: 0; color: #262626;">⚡ 대기 수 관리</h4>
+                <h4 style="margin: 0; color: #111111 !important;">⚡ 대기 수 관리</h4>
             </div>
             """,
             unsafe_allow_html=True
@@ -295,13 +310,13 @@ with right_col:
         st.markdown(
             """
             <div style="
-                background-color: #f5f5f5;
+                background-color: #f0f0f0;
                 border-left: 5px solid #595959;
                 padding: 10px 14px;
                 border-radius: 4px;
                 margin-bottom: 15px;
             ">
-                <h4 style="margin: 0; color: #262626;">📋 최근 접수 내역</h4>
+                <h4 style="margin: 0; color: #111111 !important;">📋 최근 접수 내역</h4>
             </div>
             """,
             unsafe_allow_html=True
@@ -314,15 +329,15 @@ with right_col:
                 st.markdown(
                     f"""
                     <div style="
-                        background-color: #fafafa;
+                        background-color: #ffffff;
                         border: 1px solid #d9d9d9;
                         border-radius: 8px;
                         padding: 10px 14px;
                         margin-bottom: 8px;
                         font-size: 14px;
                     ">
-                        ⏱️ <b>[{item['time']}]</b> <b>{item['info']}</b> ({item['channel']})<br/>
-                        <span style="color: #595959;">📝 {item['memo'] if item['memo'] else '요청사항 없음'}</span>
+                        <span style="color: #111111 !important;">⏱️ <b>[{item['time']}]</b> <b>{item['info']}</b> ({item['channel']})</span><br/>
+                        <span style="color: #555555 !important;">📝 {item['memo'] if item['memo'] else '요청사항 없음'}</span>
                     </div>
                     """,
                     unsafe_allow_html=True
