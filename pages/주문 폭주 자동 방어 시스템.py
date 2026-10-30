@@ -69,7 +69,7 @@ is_limit_reached = current_waiting >= st.session_state.max_capacity
 is_blocked = st.session_state.auto_guard_active and is_limit_reached
 
 # ---------------------------------------------------------
-# 4. 실시간 상태 배너 & 지표 카드 UI
+# 4. 실시간 상태 배너 & 지표 카드 UI (회색 톤 적용)
 # ---------------------------------------------------------
 st.title("🚨 주문 폭주 자동 방어 시스템")
 
@@ -78,9 +78,9 @@ if is_blocked:
     st.markdown(
         """
         <div style="
-            background-color: #ffebe9;
-            border: 2px solid #ff4d4f;
-            color: #d90429;
+            background-color: #f0f0f0;
+            border: 2px solid #595959;
+            color: #262626;
             padding: 16px 20px;
             border-radius: 10px;
             font-size: 20px;
@@ -96,9 +96,9 @@ elif is_limit_reached and not st.session_state.auto_guard_active:
     st.markdown(
         """
         <div style="
-            background-color: #fffbe6;
-            border: 2px solid #ffe58f;
-            color: #d48806;
+            background-color: #f5f5f5;
+            border: 2px solid #8c8c8c;
+            color: #262626;
             padding: 16px 20px;
             border-radius: 10px;
             font-size: 20px;
@@ -114,7 +114,7 @@ else:
     st.markdown(
         """
         <div style="
-            background-color: #0b6623;
+            background-color: #434343;
             color: #ffffff;
             padding: 16px 20px;
             border-radius: 10px;
@@ -129,15 +129,15 @@ else:
         unsafe_allow_html=True
     )
 
-# [2] 현재 대기수 & 예상 대기시간 카드
+# [2] 현재 대기수 & 예상 대기시간 카드 (회색 통일)
 col1, col2 = st.columns(2)
 
 with col1:
     st.markdown(
         f"""
         <div style="
-            background-color: #f0f7ff;
-            border: 2px solid #1890ff;
+            background-color: #f5f5f5;
+            border: 2px solid #d9d9d9;
             border-radius: 12px;
             padding: 20px;
             text-align: center;
@@ -145,7 +145,7 @@ with col1:
             <div style="color: #434343; font-size: 16px; font-weight: bold; margin-bottom: 8px;">
                 👥 현재 대기수:
             </div>
-            <div style="color: #0958d9; font-size: 38px; font-weight: 800; margin-bottom: 6px;">
+            <div style="color: #1f1f1f; font-size: 38px; font-weight: 800; margin-bottom: 6px;">
                 {current_waiting} 팀
             </div>
             <div style="color: #8c8c8c; font-size: 13px;">
@@ -160,8 +160,8 @@ with col2:
     st.markdown(
         f"""
         <div style="
-            background-color: #fff7e6;
-            border: 2px solid #ffa940;
+            background-color: #f5f5f5;
+            border: 2px solid #d9d9d9;
             border-radius: 12px;
             padding: 20px;
             text-align: center;
@@ -169,7 +169,7 @@ with col2:
             <div style="color: #434343; font-size: 16px; font-weight: bold; margin-bottom: 8px;">
                 ⏱️ 예상 대기시간:
             </div>
-            <div style="color: #d46b08; font-size: 38px; font-weight: 800; margin-bottom: 6px;">
+            <div style="color: #1f1f1f; font-size: 38px; font-weight: 800; margin-bottom: 6px;">
                 약 {estimated_wait_time} 분
             </div>
             <div style="color: #8c8c8c; font-size: 13px;">
@@ -183,23 +183,23 @@ with col2:
 st.write("") # 간격 조정
 
 # ---------------------------------------------------------
-# 5. 카드 전체 감싸기 UI (입력칸/버튼/목록 포함)
+# 5. 회색 카드 테두리로 감싼 전체 기능 영역
 # ---------------------------------------------------------
 left_col, right_col = st.columns([1, 1])
 
-# --- [좌측] 신규 주문 / 예약 접수 (전체 카드 박스) ---
+# --- [좌측] 신규 주문 / 예약 접수 카드 ---
 with left_col:
     with st.container(border=True):
         st.markdown(
             """
             <div style="
-                background-color: #f6ffed;
-                border-left: 5px solid #52c41a;
+                background-color: #f5f5f5;
+                border-left: 5px solid #595959;
                 padding: 10px 14px;
                 border-radius: 4px;
                 margin-bottom: 15px;
             ">
-                <h4 style="margin: 0; color: #274e13;">📥 신규 주문 / 예약 접수</h4>
+                <h4 style="margin: 0; color: #262626;">📥 신규 주문 / 예약 접수</h4>
             </div>
             """,
             unsafe_allow_html=True
@@ -229,20 +229,20 @@ with left_col:
                     st.success(f"✅ 주문이 접수되었습니다. (현재 대기수: {st.session_state.waiting_count}팀)")
                     st.rerun()
 
-# --- [우측] 대기 수 관리 & 최근 접수 내역 (전체 카드 박스) ---
+# --- [우측] 대기 수 관리 & 최근 접수 내역 카드 ---
 with right_col:
     # 1. 대기 수 관리 전체 카드
     with st.container(border=True):
         st.markdown(
             """
             <div style="
-                background-color: #f9f0ff;
-                border-left: 5px solid #722ed1;
+                background-color: #f5f5f5;
+                border-left: 5px solid #595959;
                 padding: 10px 14px;
                 border-radius: 4px;
                 margin-bottom: 15px;
             ">
-                <h4 style="margin: 0; color: #391085;">⚡ 대기 수 관리</h4>
+                <h4 style="margin: 0; color: #262626;">⚡ 대기 수 관리</h4>
             </div>
             """,
             unsafe_allow_html=True
@@ -260,4 +260,48 @@ with right_col:
         with btn_col2:
             if st.button("➖ 손님 입장 / 조리 완료 (-1팀)", type="primary", use_container_width=True):
                 if st.session_state.waiting_count > 0:
-                    st.session_state.waiting
+                    st.session_state.waiting_count -= 1
+                    st.toast("대기 1팀이 처리되었습니다.")
+                    st.rerun()
+                else:
+                    st.warning("현재 대기 중인 팀이 없습니다.")
+
+    st.write("") # 간격
+
+    # 2. 최근 접수 내역 전체 카드
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div style="
+                background-color: #f5f5f5;
+                border-left: 5px solid #595959;
+                padding: 10px 14px;
+                border-radius: 4px;
+                margin-bottom: 15px;
+            ">
+                <h4 style="margin: 0; color: #262626;">📋 최근 접수 내역</h4>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        if not st.session_state.order_history:
+            st.info("접수된 주문 내역이 없습니다.")
+        else:
+            for item in st.session_state.order_history[:5]:
+                st.markdown(
+                    f"""
+                    <div style="
+                        background-color: #fafafa;
+                        border: 1px solid #d9d9d9;
+                        border-radius: 8px;
+                        padding: 10px 14px;
+                        margin-bottom: 8px;
+                        font-size: 14px;
+                    ">
+                        ⏱️ <b>[{item['time']}]</b> <b>{item['info']}</b> ({item['channel']})<br/>
+                        <span style="color: #595959;">📝 {item['memo'] if item['memo'] else '요청사항 없음'}</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
