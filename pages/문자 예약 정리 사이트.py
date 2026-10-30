@@ -1,596 +1,566 @@
-import sqlite3
-from datetime import date, datetime
 
-import pandas as pd
+import re
+from datetime import datetime, date, time
 import streamlit as st
 
-# -------------------------
-# 기본 설정
-# -------------------------
 st.set_page_config(
-    page_title="전화 · 매출 관리",
-    page_icon="☎️",
+    page_title="예약 보드",
+    page_icon="📅",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
-DB_PATH = "calls.db"
-
-CALL_CATEGORIES = ["문의", "예약", "주문", "불만", "업무", "기타"]
-CALL_STATUSES = ["미처리", "처리 중", "완료"]
-
-
-# -------------------------
-# 데이터베이스
-# -------------------------
-def get_connection():
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    conn.execute("PRAGMA busy_timeout = 10000")
-    return conn
-
-
-def init_db():
-    with get_connection() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS calls (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                call_time TEXT NOT NULL,
-                caller TEXT NOT NULL DEFAULT '',
-                phone TEXT NOT NULL DEFAULT '',
-                category TEXT NOT NULL,
-                summary TEXT NOT NULL DEFAULT '',
-                status TEXT NOT NULL
-            )
-        """)
-
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS sales (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sale_date TEXT NOT NULL,
-                product TEXT NOT NULL,
-                quantity INTEGER NOT NULL CHECK(quantity > 0),
-                unit_price INTEGER NOT NULL CHECK(unit_price >= 0),
-                note TEXT NOT NULL DEFAULT ''
-            )
-        """)
-
-
-def add_call(caller, phone, category, summary, status):
-    with get_connection() as conn:
-        conn.execute("""
-            INSERT INTO calls
-            (call_time, caller, phone, category, summary, status)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            caller.strip(),
-            phone.strip(),
-            category,
-            summary.strip(),
-            status,
-        ))
-
-
-def update_call_phone(call_id, phone):
-    with get_connection() as conn:
-        conn.execute(
-            "UPDATE calls SET phone = ? WHERE id = ?",
-            (phone.strip(), int(call_id)),
-        )
-
-
-def delete_call(call_id):
-    with get_connection() as conn:
-        conn.execute(
-            "DELETE FROM calls WHERE id = ?",
-            (int(call_id),),
-        )
-
-
-def add_sale(sale_date, product, quantity, unit_price, note):
-    with get_connection() as conn:
-        conn.execute("""
-            INSERT INTO sales
-            (sale_date, product, quantity, unit_price, note)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            sale_date.isoformat(),
-            product.strip(),
-            int(quantity),
-            int(unit_price),
-            note.strip(),
-        ))
-
-
-def delete_sale(sale_id):
-    with get_connection() as conn:
-        conn.execute(
-            "DELETE FROM sales WHERE id = ?",
-            (int(sale_id),),
-        )
-
-
-def load_calls():
-    with get_connection() as conn:
-        return pd.read_sql_query(
-            "SELECT * FROM calls ORDER BY id DESC", conn
-        )
-
-
-def load_sales():
-    with get_connection() as conn:
-        return pd.read_sql_query("""
-            SELECT id, sale_date, product, quantity, unit_price,
-                   quantity * unit_price AS total, note
-            FROM sales
-            ORDER BY sale_date DESC, id DESC
-        """, conn)
-
-
-# -------------------------
-# 데이터베이스 초기화
-# -------------------------
-try:
-    init_db()
-except (sqlite3.Error, OSError):
-    st.error("데이터베이스를 준비하지 못했습니다.")
-    st.stop()
-
-
-# -------------------------
-# 앱 제목과 메뉴
-# -------------------------
-st.title("☎️ 전화 · 매출 관리")
-st.caption("전화 기록과 매출을 한곳에서 관리하는 대시보드")
-
-page = st.sidebar.radio(
-    "메뉴",
-    ["대시보드", "전화 기록", "매출 관리"],
-)
-
-st.sidebar.caption("대시보드는 5초마다 기록을 새로 불러옵니다.")
-
-
-# -------------------------
-# 전화 기록 입력
-# -------------------------
-def call_entry_form():
-    with st.expander("➕ 새 전화 기록 추가", expanded=True):
-        with st.form("call_form", clear_on_submit=True):
-            caller = st.text_input("발신자 이름")
-            phone = st.text_input("전화번호 (선택)")
-            category = st.selectbox("전화 유형", CALL_CATEGORIES)
-            summary = st.text_area("통화 내용 요약")
-            status = st.selectbox("처리 상태", CALL_STATUSES)
-
-            submitted = st.form_submit_button(
-                "전화 기록 저장",
-                type="primary",
-            )
-
-        if submitted:
-            try:
-                add_call(caller, phone, category, summary, status)
-                st.success("전화 기록을 저장했습니다.")
-                st.rerun()
-            except (sqlite3.Error, OSError):
-                st.error("전화 기록 저장에 실패했습니다.")
-
-
-# -------------------------
-# 매출 기록 입력
-# -------------------------
-def sales_entry_form():
-    with st.expander("➕ 매출 내역 추가", expanded=True):
-        with st.form("sales_form", clear_on_submit=True):
-            sale_date = st.date_input("매출 날짜", value=date.today())
-            product = st.text_input("상품명", placeholder="예: 음료")
-            quantity = st.number_input(
-                "수량", min_value=1, value=1, step=1
-            )
-            unit_price = st.number_input(
-                "개당 판매 가격(원)",
-                min_value=0,
-                value=0,
-                step=100,
-            )
-            note = st.text_input("메모 (선택)")
-
-            st.caption(
-                f"예상 매출: {int(quantity) * int(unit_price):,}원"
-            )
-
-            submitted = st.form_submit_button(
-                "매출 저장",
-                type="primary",
-            )
-
-        if submitted:
-            if not product.strip():
-                st.warning("상품명을 입력해 주세요.")
-            else:
-                try:
-                    add_sale(
-                        sale_date, product, quantity, unit_price, note
-                    )
-                    st.success("매출 내역을 저장했습니다.")
-                    st.rerun()
-                except (sqlite3.Error, OSError, ValueError):
-                    st.error("매출 저장에 실패했습니다.")
-
-
-# -------------------------
-# 대시보드
-# -------------------------
-@st.fragment(run_every="5s")
-def dashboard():
-    try:
-        calls = load_calls()
-        sales = load_sales()
-    except (sqlite3.Error, pd.errors.DatabaseError, OSError):
-        st.error("데이터를 불러오지 못했습니다.")
-        return
-
-    total_calls = len(calls)
-    pending = (
-        int((calls["status"] != "완료").sum())
-        if not calls.empty else 0
-    )
-    completed = (
-        int((calls["status"] == "완료").sum())
-        if not calls.empty else 0
-    )
-    total_sales = (
-        int(sales["total"].sum())
-        if not sales.empty else 0
-    )
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("전체 전화", f"{total_calls:,}건")
-    c2.metric("미완료 전화", f"{pending:,}건")
-    c3.metric("완료 전화", f"{completed:,}건")
-    c4.metric("누적 매출", f"{total_sales:,}원")
-
-    st.divider()
-
-    left, right = st.columns(2)
-
-    with left:
-        st.subheader("📊 전화 유형별 건수")
-        if calls.empty:
-            st.info("전화 기록을 추가해 주세요.")
-        else:
-            category_counts = (
-                calls["category"]
-                .value_counts()
-                .rename_axis("전화 유형")
-                .reset_index(name="건수")
-            )
-            st.bar_chart(
-                category_counts, x="전화 유형", y="건수"
-            )
-
-    with right:
-        st.subheader("📈 일별 매출")
-        if sales.empty:
-            st.info("매출 내역을 추가해 주세요.")
-        else:
-            sales_by_day = (
-                sales.assign(
-                    매출일=pd.to_datetime(sales["sale_date"])
-                )
-                .groupby("매출일", as_index=False)["total"]
-                .sum()
-                .rename(columns={"total": "매출(원)"})
-                .sort_values("매출일")
-            )
-            st.line_chart(
-                sales_by_day, x="매출일", y="매출(원)"
-            )
-
-    st.subheader("🕒 시간대별 전화량")
-    if calls.empty:
-        st.info("전화 기록을 추가하면 통계가 표시됩니다.")
-    else:
-        calls["call_time"] = pd.to_datetime(
-            calls["call_time"], errors="coerce"
-        )
-        hourly = (
-            calls.dropna(subset=["call_time"])
-            .assign(시간=lambda frame: frame["call_time"].dt.floor("h"))
-            .groupby("시간")
-            .size()
-            .reset_index(name="전화 건수")
-            .sort_values("시간")
-        )
-        if hourly.empty:
-            st.info("시간 통계를 계산할 기록이 없습니다.")
-        else:
-            st.line_chart(hourly, x="시간", y="전화 건수")
-
-    st.subheader("📋 최근 전화 기록")
-    if calls.empty:
-        st.info("아직 전화 기록이 없습니다.")
-    else:
-        recent = calls.head(10).rename(columns={
-            "call_time": "전화 시간",
-            "caller": "발신자",
-            "phone": "전화번호",
-            "category": "유형",
-            "summary": "통화 내용",
-            "status": "처리 상태",
-        })
-        st.dataframe(
-            recent[[
-                "전화 시간", "발신자", "전화번호",
-                "유형", "통화 내용", "처리 상태"
-            ]],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-    st.subheader("🛍️ 상품별 매출")
-    if sales.empty:
-        st.info("매출 내역이 없습니다.")
-    else:
-        by_product = (
-            sales.groupby("product", as_index=False)["total"]
-            .sum()
-            .rename(columns={
-                "product": "상품명",
-                "total": "매출(원)",
-            })
-            .sort_values("매출(원)", ascending=False)
-        )
-        st.bar_chart(by_product, x="상품명", y="매출(원)")
-
-
-# -------------------------
-# 전화 기록 화면
-# -------------------------
-def phone_records_page():
-    call_entry_form()
-    st.subheader("📋 전화 기록 목록")
-
-    try:
-        df = load_calls()
-    except (sqlite3.Error, pd.errors.DatabaseError, OSError):
-        st.error("전화 기록을 불러오지 못했습니다.")
-        return
-
-    keyword = st.text_input("발신자·전화번호·통화 내용 검색")
-    status_filter = st.selectbox(
-        "처리 상태 필터", ["전체"] + CALL_STATUSES
-    )
-
-    filtered = df.copy()
-
-    if keyword:
-        mask = pd.Series(False, index=filtered.index)
-        for col in ["caller", "phone", "summary"]:
-            mask |= filtered[col].fillna("").astype(str).str.contains(
-                keyword, case=False, regex=False
-            )
-        filtered = filtered[mask]
-
-    if status_filter != "전체":
-        filtered = filtered[filtered["status"] == status_filter]
-
-    display = filtered.rename(columns={
-        "call_time": "전화 시간",
-        "caller": "발신자",
-        "phone": "전화번호",
-        "category": "유형",
-        "summary": "통화 내용",
-        "status": "처리 상태",
-    })
-
-    st.dataframe(
-        display[[
-            "전화 시간", "발신자", "전화번호",
-            "유형", "통화 내용", "처리 상태"
-        ]],
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    st.download_button(
-        "📥 전화 기록 CSV 다운로드",
-        data=display.to_csv(index=False).encode("utf-8-sig"),
-        file_name="전화_기록.csv",
-        mime="text/csv",
-    )
-
-    # 전화번호 수정 또는 지우기
-    st.divider()
-    st.subheader("✏️ 전화번호 수정 / 지우기")
-
-    if df.empty:
-        st.info("수정할 전화 기록이 없습니다.")
-    else:
-        call_options = {
-            f"#{int(row['id'])} | {row['call_time']} | "
-            f"{row['caller'] or '이름 없음'}": int(row["id"])
-            for _, row in df.iterrows()
-        }
-
-        selected_label = st.selectbox(
-            "수정할 전화 기록 선택",
-            list(call_options.keys()),
-            key="edit_phone_select",
-        )
-        selected_id = call_options[selected_label]
-        selected_row = df[df["id"] == selected_id].iloc[0]
-
-        with st.form("edit_phone_form"):
-            new_phone = st.text_input(
-                "전화번호 (빈칸으로 저장하면 번호 삭제)",
-                value=str(selected_row["phone"] or ""),
-            )
-            update_submitted = st.form_submit_button(
-                "전화번호 저장"
-            )
-
-        if update_submitted:
-            try:
-                update_call_phone(selected_id, new_phone)
-                st.success("전화번호를 수정했습니다.")
-                st.rerun()
-            except (sqlite3.Error, OSError):
-                st.error("전화번호 수정에 실패했습니다.")
-
-    # 전화 기록 삭제
-    st.divider()
-    st.subheader("🗑️ 전화 기록 삭제")
-
-    if df.empty:
-        st.info("삭제할 전화 기록이 없습니다.")
-    else:
-        delete_label = st.selectbox(
-            "삭제할 전화 기록 선택",
-            list(call_options.keys()),
-            key="delete_phone_select",
-        )
-        delete_id = call_options[delete_label]
-
-        confirm_call_delete = st.checkbox(
-            "선택한 전화 기록을 삭제하겠습니다.",
-            key="confirm_call_delete",
-        )
-
-        if st.button("선택한 전화 기록 삭제", type="secondary"):
-            if not confirm_call_delete:
-                st.warning("삭제 확인란을 먼저 체크해 주세요.")
-            else:
-                try:
-                    delete_call(delete_id)
-                    st.success("전화 기록을 삭제했습니다.")
-                    st.rerun()
-                except (sqlite3.Error, OSError):
-                    st.error("전화 기록 삭제에 실패했습니다.")
-
-
-# -------------------------
-# 매출 관리 화면
-# -------------------------
-def sales_records_page():
-    sales_entry_form()
-    st.subheader("💰 매출 내역 목록")
-
-    try:
-        df = load_sales()
-    except (sqlite3.Error, pd.errors.DatabaseError, OSError):
-        st.error("매출 내역을 불러오지 못했습니다.")
-        return
-
-    if df.empty:
-        st.info("아직 매출 내역이 없습니다.")
-        return
-
-    df["sale_date"] = pd.to_datetime(
-        df["sale_date"], errors="coerce"
-    )
-
-    min_day = df["sale_date"].min().date()
-    max_day = df["sale_date"].max().date()
-
-    date_range = st.date_input(
-        "조회 기간", value=(min_day, max_day)
-    )
-
-    filtered = df.copy()
-
-    if isinstance(date_range, (tuple, list)) and len(date_range) == 2:
-        start_day, end_day = date_range
-        filtered = filtered[
-            (filtered["sale_date"].dt.date >= start_day)
-            & (filtered["sale_date"].dt.date <= end_day)
-        ]
-
-    total_revenue = (
-        int(filtered["total"].sum()) if not filtered.empty else 0
-    )
-    total_units = (
-        int(filtered["quantity"].sum()) if not filtered.empty else 0
-    )
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("조회 기간 매출", f"{total_revenue:,}원")
-    m2.metric("판매 수량", f"{total_units:,}개")
-    m3.metric("판매 기록", f"{len(filtered):,}건")
-
-    shown = filtered.rename(columns={
-        "sale_date": "매출 날짜",
-        "product": "상품명",
-        "quantity": "수량",
-        "unit_price": "개당 가격(원)",
-        "total": "매출(원)",
-        "note": "메모",
-    })
-
-    st.dataframe(
-        shown[[
-            "매출 날짜", "상품명", "수량",
-            "개당 가격(원)", "매출(원)", "메모"
-        ]],
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    st.download_button(
-        "📥 매출 내역 CSV 다운로드",
-        data=shown.to_csv(index=False).encode("utf-8-sig"),
-        file_name="매출_내역.csv",
-        mime="text/csv",
-    )
-
-    # 매출 기록 삭제
-    st.divider()
-    st.subheader("🗑️ 매출 기록 삭제")
-
-    sale_options = {
-        f"#{int(row['id'])} | {row['sale_date']} | "
-        f"{row['product']} | {int(row['total']):,}원": int(row["id"])
-        for _, row in df.iterrows()
+SOURCE_STYLES = {
+    "카카오톡": {
+        "bg": "#FFF2C7", "border": "#F2C14E",
+        "text": "#614A00", "emoji": "💬"
+    },
+    "인스타그램": {
+        "bg": "#F3E2F4", "border": "#B66BC4",
+        "text": "#642C70", "emoji": "◎"
+    },
+    "문자": {
+        "bg": "#DCECFB", "border": "#5C9BD5",
+        "text": "#174B78", "emoji": "✉"
+    },
+}
+
+FOOD_EMOJI_RULES = [
+    (("삼겹", "갈비", "스테이크", "불고기", "고기",
+      "족발", "보쌈", "제육", "돈까스", "돈가스",
+      "치킨", "닭", "오리", "돼지", "소고기", "양고기"), "🍖"),
+    (("찌개", "국밥", "탕", "전골", "국", "수프", "스프"), "🍲"),
+    (("밥", "볶음밥", "덮밥", "비빔밥", "공깃밥",
+      "주먹밥", "초밥", "김밥"), "🍚"),
+    (("라면", "우동", "파스타", "국수", "냉면",
+      "쫄면", "짬뽕", "짜장면", "면", "칼국수", "마라탕"), "🍜"),
+    (("샐러드", "야채", "채소", "쌈", "나물"), "🥗"),
+    (("회", "생선", "새우", "조개", "해물", "오징어",
+      "문어", "연어", "참치", "해산물"), "🐟"),
+    (("만두", "전", "튀김", "감자", "고로케"), "🥟"),
+    (("피자",), "🍕"),
+    (("햄버거", "버거", "샌드위치"), "🍔"),
+    (("빵", "베이글", "토스트", "크루아상"), "🥐"),
+    (("떡볶이", "떡", "순대", "어묵", "김치"), "🍢"),
+    (("커피", "라떼", "아메리카노", "주스", "쥬스",
+      "콜라", "음료", "에이드", "차", "맥주", "소주", "물"), "🥤"),
+    (("케이크", "디저트", "아이스크림", "빙수",
+      "쿠키", "초콜릿", "푸딩"), "🍰"),
+    (("계란", "달걀", "오믈렛", "계란찜"), "🍳"),
+]
+
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap');
+    html, body, [class*="css"] {
+        font-family: 'Noto Sans KR', sans-serif;
     }
-
-    selected_sale_label = st.selectbox(
-        "삭제할 매출 기록 선택",
-        list(sale_options.keys()),
-        key="delete_sale_select",
-    )
-    selected_sale_id = sale_options[selected_sale_label]
-
-    confirm_sale_delete = st.checkbox(
-        "선택한 매출 기록을 삭제하겠습니다.",
-        key="confirm_sale_delete",
-    )
-
-    if st.button("선택한 매출 기록 삭제", type="secondary"):
-        if not confirm_sale_delete:
-            st.warning("삭제 확인란을 먼저 체크해 주세요.")
-        else:
-            try:
-                delete_sale(selected_sale_id)
-                st.success("매출 기록을 삭제했습니다.")
-                st.rerun()
-            except (sqlite3.Error, OSError):
-                st.error("매출 기록 삭제에 실패했습니다.")
-
-
-# -------------------------
-# 메뉴별 화면
-# -------------------------
-if page == "대시보드":
-    dashboard()
-elif page == "전화 기록":
-    phone_records_page()
-elif page == "매출 관리":
-    sales_records_page()
-
-
-st.divider()
-st.caption(
-    "이 앱은 전화 수신을 자동 감지하거나 녹음하지 않습니다. "
-    "전화 기록은 직접 입력합니다. "
-    "배포 환경에서는 SQLite 데이터의 영구 보존이 보장되지 않습니다."
+    .stApp { background: #F5F7FB; }
+    .block-container {
+        padding-top: 1.5rem;
+        padding-bottom: 2rem;
+        max-width: 1450px;
+    }
+    header[data-testid="stHeader"] { background: transparent; }
+    .hero {
+        background: linear-gradient(120deg, #18243B 0%, #263D61 100%);
+        border-radius: 22px;
+        padding: 25px 30px;
+        color: white;
+        margin-bottom: 22px;
+        box-shadow: 0 10px 28px rgba(25,43,72,.12);
+    }
+    .hero-title {
+        font-size: 1.8rem;
+        font-weight: 800;
+        letter-spacing: -.5px;
+    }
+    .hero-sub {
+        color: #D8E2F2;
+        font-size: .95rem;
+        margin-top: 5px;
+    }
+    .panel-heading {
+        font-size: 1.12rem;
+        font-weight: 800;
+        color: #202B3D;
+        margin-bottom: 3px;
+    }
+    .panel-sub {
+        font-size: .84rem;
+        color: #7A8495;
+        margin-bottom: 15px;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: white;
+        border: 1px solid #E5EAF2;
+        border-radius: 18px;
+        box-shadow: 0 5px 20px rgba(25,43,72,.045);
+    }
+    div[data-testid="stTextArea"] textarea {
+        border-radius: 12px;
+        background: #FBFCFE;
+        border-color: #DDE4EE;
+        font-size: .95rem;
+    }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+        border-radius: 10px;
+        border-color: #DDE4EE;
+    }
+    div.stButton > button {
+        border-radius: 11px;
+        min-height: 2.8rem;
+        font-weight: 700;
+        border: 1px solid #D9E1EC;
+    }
+    div.stButton > button[kind="primary"] {
+        background: #253B5D;
+        border-color: #253B5D;
+    }
+    .reservation-card {
+        padding: 15px 16px 14px;
+        border: 1px solid var(--card-border);
+        border-left: 7px solid var(--card-border);
+        border-radius: 14px;
+        background: var(--card-bg);
+        color: #263247;
+        margin: 2px 2px 12px;
+        box-shadow: 0 3px 9px rgba(24,36,59,.035);
+    }
+    .reservation-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .reservation-time {
+        font-size: 1.28rem;
+        font-weight: 800;
+        letter-spacing: -.3px;
+    }
+    .reservation-people {
+        font-size: .9rem;
+        font-weight: 700;
+    }
+    .reservation-name {
+        font-size: 1rem;
+        font-weight: 800;
+        margin-top: 9px;
+    }
+    .menu-count {
+        display: inline-block;
+        font-size: .75rem;
+        font-weight: 700;
+        padding: 4px 8px;
+        margin-top: 9px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.72);
+        border: 1px solid rgba(70,80,100,.12);
+    }
+    .food-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 10px;
+        margin-top: 8px;
+        background: rgba(255,255,255,.66);
+        border-radius: 12px;
+    }
+    .food-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 45px;
+        width: 45px;
+        height: 45px;
+        border-radius: 12px;
+        background: rgba(255,255,255,.9);
+        font-size: 1.8rem;
+    }
+    .food-name {
+        flex: 1;
+        min-width: 0;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+    .food-quantity {
+        font-size: .88rem;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .reservation-source {
+        font-size: .78rem;
+        margin-top: 10px;
+        opacity: .8;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 45px 18px;
+        border: 1px dashed #CBD5E1;
+        border-radius: 14px;
+        color: #7A8495;
+        background: #FAFBFD;
+    }
+    .empty-icon {
+        font-size: 2rem;
+        margin-bottom: 8px;
+    }
+    .small-note {
+        font-size: .8rem;
+        color: #7A8495;
+    }
+    div[data-testid="stMetric"] {
+        background: #F7F9FC;
+        border: 1px solid #E8EDF4;
+        border-radius: 12px;
+        padding: 10px 12px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
+
+st.markdown(
+    '<div class="hero"><div class="hero-title">📅 예약 보드</div>'
+    '<div class="hero-sub">여러 채널의 예약을 한눈에 · 가까운 예약부터 자동 정렬</div></div>',
+    unsafe_allow_html=True,
+)
+
+if "reservations" not in st.session_state:
+    st.session_state.reservations = []
+
+
+def food_emoji(food_name: str) -> str:
+    name = food_name.replace(" ", "")
+    for keywords, emoji in FOOD_EMOJI_RULES:
+        if any(keyword in name for keyword in keywords):
+            return emoji
+    return "🍽️"
+
+
+def parse_food_items(food_text: str):
+    cleaned = re.sub(
+        r"^(?:음식|메뉴)\s*[:：=]\s*",
+        "",
+        food_text.strip()
+    )
+    parts = re.split(
+        r"\s*(?:[,，/＋+]\s*|\s+및\s+|\s+그리고\s+|\n+)\s*",
+        cleaned
+    )
+
+    items = []
+
+    for part in parts:
+        part = part.strip(" \t-·")
+        if not part:
+            continue
+
+        quantity_match = re.search(
+            r"(?:\s+|^)(\d+)\s*(인분|개|그릇|잔|접시|병|명|세트|판|마리|줄|인)\s*$",
+            part
+        )
+
+        if quantity_match:
+            quantity = int(quantity_match.group(1))
+            unit = quantity_match.group(2)
+            name = part[:quantity_match.start()].strip()
+            quantity_label = f"{quantity}{unit}"
+        else:
+            name = part
+            quantity_label = ""
+
+        if name:
+            items.append({
+                "name": name,
+                "emoji": food_emoji(name),
+                "quantity": quantity_label
+            })
+
+    return items
+
+
+def parse_reservation(raw_text: str):
+    text = raw_text.strip()
+
+    if not text:
+        return None, "예약 내용을 입력해 주세요."
+
+    people_match = re.search(r"(\d+)\s*명", text)
+
+    if not people_match:
+        people_match = re.search(
+            r"(?:인원|인원수)\s*[:：=]?\s*(\d+)",
+            text
+        )
+
+    if not people_match:
+        return None, "인원수를 찾지 못했어요. 예: 2명, 18:30, 음식: 파스타"
+
+    people = int(people_match.group(1))
+
+    time_match = re.search(
+        r"(?<!\d)([01]?\d|2[0-3])\s*:\s*([0-5]\d)(?!\d)",
+        text
+    )
+
+    if time_match:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2))
+    else:
+        time_match = re.search(
+            r"(?<!\d)([01]?\d|2[0-3])\s*시(?:\s*([0-5]?\d)\s*분?)?",
+            text
+        )
+
+        if not time_match:
+            return None, "예약 시간을 찾지 못했어요. 예: 18:30 또는 18시 30분"
+
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2) or 0)
+
+    food_match = re.search(
+        r"(?:음식|메뉴)\s*[:：=]\s*([^\n]+)",
+        text
+    )
+
+    if food_match:
+        food_text = food_match.group(1).strip()
+    else:
+        food_text = re.sub(r"\d+\s*명", " ", text)
+        food_text = re.sub(
+            r"(?<!\d)([01]?\d|2[0-3])\s*:\s*[0-5]\d(?!\d)",
+            " ",
+            food_text
+        )
+        food_text = re.sub(
+            r"(?<!\d)([01]?\d|2[0-3])\s*시(?:\s*[0-5]?\d\s*분?)?",
+            " ",
+            food_text
+        )
+        food_text = re.sub(
+            r"(?:인원수?|시간)\s*[:：=]?",
+            " ",
+            food_text
+        )
+        food_text = re.sub(
+            r"^[,，/|\s]+|[,，/|\s]+$",
+            "",
+            food_text
+        )
+        food_text = re.sub(r"^\s*[,，/|]+\s*", "", food_text)
+        food_text = re.sub(r"\s+", " ", food_text).strip(" -·")
+
+    food_items = parse_food_items(food_text)
+
+    if not food_items:
+        return None, "음식 종류를 찾지 못했어요. 예: 음식: 삼겹살 2인분, 된장찌개 1개"
+
+    return {
+        "people": people,
+        "hour": hour,
+        "minute": minute,
+        "food": food_text,
+        "food_items": food_items,
+        "datetime": datetime.combine(
+            date.today(),
+            time(hour, minute)
+        ),
+        "raw": raw_text.strip(),
+        "created": datetime.now().isoformat(timespec="seconds"),
+    }, None
+
+
+left, right = st.columns([0.92, 1.08], gap="large")
+
+with left:
+    with st.container(border=True):
+        st.markdown(
+            '<div class="panel-heading">✍️ 예약 문자 입력</div>',
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            '<div class="panel-sub">메시지를 복사해 붙여 넣고 채널을 선택하세요.</div>',
+            unsafe_allow_html=True
+        )
+
+        source = st.selectbox(
+            "연락이 들어온 앱",
+            list(SOURCE_STYLES.keys())
+        )
+
+        # 예약자명 입력
+        customer_name = st.text_input(
+            "예약자명",
+            placeholder="예: 홍길동"
+        )
+
+        raw_text = st.text_area(
+            "예약 내용",
+            height=190,
+            placeholder=(
+                "예시: 4명, 18:30, 삼겹살 2인분, 된장찌개 1개\n\n"
+                "또는\n"
+                "인원: 4명 / 시간: 18:30 / 음식: 삼겹살 2인분, 된장찌개 1개"
+            ),
+            help="인원수, 예약 시간, 음식 종류를 포함한 문자를 붙여 넣어 주세요.",
+        )
+
+        if st.button(
+            "＋ 예약 추가",
+            type="primary",
+            width="stretch"
+        ):
+            reservation, error = parse_reservation(raw_text)
+
+            if error:
+                st.error(error)
+            else:
+                reservation["source"] = source
+                reservation["customer_name"] = (
+                    customer_name.strip() or "이름 미입력"
+                )
+                reservation["id"] = reservation["created"]
+
+                st.session_state.reservations.append(reservation)
+
+                st.toast("예약을 추가했어요!", icon="✅")
+                st.rerun()
+
+        st.markdown("**입력 예시**")
+        st.code(
+            "4명, 18:30, 삼겹살 2인분, 된장찌개 1개",
+            language="text"
+        )
+        st.code(
+            "인원: 2명 / 시간: 19:00 / 음식: 파스타 2개, 콜라 2잔",
+            language="text"
+        )
+
+        st.markdown(
+            '<div class="small-note">카카오톡=노랑 · 인스타그램=보라 · 문자=파랑</div>',
+            unsafe_allow_html=True
+        )
+
+
+with right:
+    with st.container(border=True):
+        st.markdown(
+            '<div class="panel-heading">🗂️ 예약 정리표</div>',
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            '<div class="panel-sub">이 영역 안에서 마우스 휠로 예약 목록만 스크롤할 수 있어요.</div>',
+            unsafe_allow_html=True
+        )
+
+        reservations = sorted(
+            st.session_state.reservations,
+            key=lambda item: (
+                item["datetime"] < datetime.now(),
+                item["datetime"]
+            ),
+        )
+
+        total_people = sum(
+            item["people"] for item in reservations
+        )
+
+        total_menu_kinds = sum(
+            len(item.get("food_items", []))
+            for item in reservations
+        )
+
+        m1, m2, m3 = st.columns(3)
+
+        m1.metric("등록된 예약", f"{len(reservations)}건")
+        m2.metric("예약 인원", f"{total_people}명")
+        m3.metric("메뉴 종류", f"{total_menu_kinds}종")
+
+        with st.container(height=570, border=False):
+            if reservations:
+                for item in reservations:
+                    style = SOURCE_STYLES.get(
+                        item.get("source", "문자"),
+                        SOURCE_STYLES["문자"]
+                    )
+
+                    time_label = (
+                        f'{item["hour"]:02d}:{item["minute"]:02d}'
+                    )
+
+                    past = item["datetime"] < datetime.now()
+                    status = "지난 시간" if past else "예정"
+
+                    customer_name = item.get(
+                        "customer_name",
+                        "이름 미입력"
+                    )
+
+                    food_rows = "".join(
+                        f'''<div class="food-row">
+                            <div class="food-icon">{menu["emoji"]}</div>
+                            <div class="food-name">{menu["name"]}</div>
+                            <div class="food-quantity">{menu["quantity"]}</div>
+                        </div>'''
+                        for menu in item.get(
+                            "food_items",
+                            [{
+                                "name": item.get("food", "메뉴"),
+                                "emoji": "🍽️",
+                                "quantity": ""
+                            }]
+                        )
+                    )
+
+                    menu_count = len(
+                        item.get("food_items", [])
+                    )
+
+                    st.markdown(
+                        f'''<div class="reservation-card"
+                            style="--card-bg:{style["bg"]};
+                                   --card-border:{style["border"]};">
+
+                            <div class="reservation-top">
+                                <div class="reservation-time">{time_label}</div>
+                                <div class="reservation-people">
+                                    {item["people"]}명 · {status}
+                                </div>
+                            </div>
+
+                            <div class="reservation-name">
+                                👤 {customer_name}
+                            </div>
+
+                            <div class="menu-count">
+                                🍽️ 메뉴 {menu_count}종
+                            </div>
+
+                            {food_rows}
+
+                            <div class="reservation-source">
+                                {style["emoji"]} {item.get("source", "문자")}
+                            </div>
+                        </div>''',
+                        unsafe_allow_html=True,
+                    )
+
+            else:
+                st.markdown(
+                    '<div class="empty-state">'
+                    '<div class="empty-icon">🗓️</div>'
+                    '<b>아직 등록된 예약이 없어요.</b><br>'
+                    '왼쪽에서 예약 문자를 입력해 추가해 주세요.'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+
+        if reservations and st.button(
+            "🗑️ 전체 예약 삭제",
+            width="stretch"
+        ):
+            st.session_state.reservations = []
+            st.rerun()
